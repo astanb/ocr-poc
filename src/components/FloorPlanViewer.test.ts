@@ -16,6 +16,7 @@ describe("getPinPopoverDetails", () => {
       roomId: "room-1",
       roomRawName: "GF017 - Disp. Store",
       matchedText: "Disp. St0re GFOI7",
+      matchedSource: "ocr:paddle",
       page: 2,
       confidence: 0.9,
       status: "matched",
@@ -25,6 +26,7 @@ describe("getPinPopoverDetails", () => {
     expect(getPinPopoverDetails(match)).toEqual({
       room: "GF017 - Disp. Store",
       matchedText: "Disp. St0re GFOI7",
+      source: "Paddle OCR",
       page: "2",
       confidence: "90%",
       status: "matched",

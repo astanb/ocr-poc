@@ -29,6 +29,21 @@ const candidate = (
   childItems: []
 });
 
+const childItem = (
+  text: string,
+  x: number,
+  y: number,
+  width = text.length * 6
+): ExtractedLabelCandidate["childItems"][number] => ({
+  text,
+  page: 1,
+  x,
+  y,
+  width,
+  height: 10,
+  source: "pdf-text"
+});
+
 describe("matchRooms", () => {
   it("matches rooms by unique exact room code with high confidence", () => {
     const matches = matchRooms(
@@ -149,6 +164,53 @@ describe("matchRooms", () => {
     expect(matches[0]).toMatchObject({
       matchedCandidateId: "candidate-2",
       matchedText: "Teaching Area G046",
+      confidence: 0.98,
+      status: "matched"
+    });
+  });
+
+  it("localizes a multi-room label candidate to the matched room-code area", () => {
+    const multiRoomCandidate = {
+      ...candidate(
+        "candidate-1",
+        "Interview Janitor LG014 LG105",
+        "interview janitor lg014 lg105",
+        100
+      ),
+      x: 100,
+      y: 20,
+      width: 260,
+      height: 60,
+      childItems: [
+        childItem("Interview", 100, 20, 72),
+        childItem("Janitor", 230, 20, 54),
+        childItem("LG014", 110, 46, 40),
+        childItem("LG105", 238, 46, 40)
+      ]
+    };
+
+    const matches = matchRooms(
+      [
+        room("room-1", "LG014 - Interview", "lg014 interview", "LG014"),
+        room("room-2", "LG105 - Janitor", "lg105 janitor", "LG105")
+      ],
+      [multiRoomCandidate]
+    );
+
+    expect(matches[0]).toMatchObject({
+      matchedCandidateId: "candidate-1:LG014",
+      matchedText: "Interview LG014",
+      matchedSource: "pdf-text",
+      x: 136,
+      y: 38,
+      confidence: 0.98,
+      status: "matched"
+    });
+    expect(matches[1]).toMatchObject({
+      matchedCandidateId: "candidate-1:LG105",
+      matchedText: "Janitor LG105",
+      x: 257,
+      y: 38,
       confidence: 0.98,
       status: "matched"
     });

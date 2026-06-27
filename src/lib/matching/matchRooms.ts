@@ -1,14 +1,19 @@
 import { fuzzy } from "fast-fuzzy";
-import type { ExtractedLabelCandidate } from "../../types/floorPlan";
+import type { ExtractedLabelCandidate, ExtractedTextItem } from "../../types/floorPlan";
 import type { RoomMatch, RoomMatchAlternative } from "../../types/matching";
 import type { RoomListItem } from "../../types/rooms";
-import { extractRoomCode, normalizeRoomCode, tokenise } from "./normalize";
+import {
+  extractRoomCodes,
+  normalizeText,
+  tokenise
+} from "./normalize";
 
 const MIN_MATCH_CONFIDENCE = 0.6;
 const AMBIGUITY_GAP = 0.08;
 
 type ScoredCandidate = RoomMatchAlternative & {
   candidate: ExtractedLabelCandidate;
+  assignmentId: string;
 };
 
 type ScoredRoomCandidate = {
@@ -35,12 +40,12 @@ export function matchRooms(
     .toSorted((left, right) => right.score.confidence - left.score.confidence);
 
   for (const { room, score } of allScores) {
-    if (selectedByRoomId.has(room.id) || assignedCandidateIds.has(score.candidate.id)) {
+    if (selectedByRoomId.has(room.id) || assignedCandidateIds.has(score.assignmentId)) {
       continue;
     }
 
     selectedByRoomId.set(room.id, score);
-    assignedCandidateIds.add(score.candidate.id);
+    assignedCandidateIds.add(score.assignmentId);
   }
 
   return rooms.map((room) =>
@@ -69,12 +74,12 @@ function matchRoom(
   return {
     roomId: room.id,
     roomRawName: room.rawName,
-    matchedCandidateId: best.candidate.id,
-    matchedText: best.candidate.rawText,
+    matchedCandidateId: best.candidateId,
+    matchedText: best.text,
     matchedSource: best.candidate.source,
     page: best.candidate.page,
-    x: best.candidate.x + best.candidate.width / 2,
-    y: best.candidate.y + best.candidate.height / 2,
+    x: best.x,
+    y: best.y,
     confidence: best.confidence,
     status: ambiguous ? "ambiguous" : "matched",
     reason: ambiguous
@@ -109,12 +114,14 @@ function scoreCandidate(
   candidate: ExtractedLabelCandidate
 ): ScoredCandidate {
   const roomCode = room.possibleCode;
-  const candidateCode = extractRoomCode(candidate.rawText);
+  const candidateCodes = extractRoomCodes(candidate.rawText);
+  const candidateCode = candidateCodes[0];
   const roomTokens = tokenise(room.normalizedName);
   const candidateTokens = tokenise(candidate.normalizedText);
   const tokenOverlap = getTokenOverlap(roomTokens, candidateTokens);
 
-  if (roomCode && candidateCode && roomCode === normalizeRoomCode(candidateCode)) {
+  if (roomCode && candidateCodes.includes(roomCode)) {
+    const localized = localizeCandidateForRoomCode(candidate, roomCode, roomTokens, candidateCodes);
     const descriptiveTokenOverlap = getDescriptiveTokenOverlap(
       roomTokens,
       candidateTokens,
@@ -128,10 +135,11 @@ function scoreCandidate(
           : 0.86;
     return {
       candidate,
-      candidateId: candidate.id,
-      text: candidate.rawText,
-      x: candidate.x,
-      y: candidate.y,
+      assignmentId: localized.assignmentId,
+      candidateId: localized.assignmentId,
+      text: localized.text,
+      x: localized.x,
+      y: localized.y,
       confidence,
       reason:
         confidence === 0.98
@@ -230,12 +238,101 @@ function scored(
 ): ScoredCandidate {
   return {
     candidate,
+    assignmentId: candidate.id,
     candidateId: candidate.id,
     text: candidate.rawText,
-    x: candidate.x,
-    y: candidate.y,
+    x: candidate.x + candidate.width / 2,
+    y: candidate.y + candidate.height / 2,
     confidence,
     reason
+  };
+}
+
+function localizeCandidateForRoomCode(
+  candidate: ExtractedLabelCandidate,
+  roomCode: string,
+  roomTokens: string[],
+  candidateCodes: string[]
+): {
+  assignmentId: string;
+  text: string;
+  x: number;
+  y: number;
+} {
+  if (candidateCodes.length <= 1 || candidate.childItems.length === 0) {
+    return {
+      assignmentId: candidate.id,
+      text: candidate.rawText,
+      x: candidate.x + candidate.width / 2,
+      y: candidate.y + candidate.height / 2
+    };
+  }
+
+  const codeItem = candidate.childItems.find((item) =>
+    extractRoomCodes(item.text).includes(roomCode)
+  );
+  if (!codeItem) {
+    return {
+      assignmentId: `${candidate.id}:${roomCode}`,
+      text: candidate.rawText,
+      x: candidate.x + candidate.width / 2,
+      y: candidate.y + candidate.height / 2
+    };
+  }
+
+  const descriptiveTokens = roomTokens.filter((token) => token !== roomCode.toLowerCase());
+  const selectedItems = candidate.childItems.filter((item) =>
+    item === codeItem ||
+    (hasAnyToken(item.text, descriptiveTokens) && isNearSameLabelColumn(item, codeItem))
+  );
+  const localizedItems = selectedItems.length > 1 ? selectedItems : [codeItem];
+  const bounds = getTextItemBounds(localizedItems);
+  const text = localizedItems
+    .toSorted(compareTextItemReadingOrder)
+    .map((item) => item.text.trim())
+    .join(" ");
+
+  return {
+    assignmentId: `${candidate.id}:${roomCode}`,
+    text,
+    x: bounds.x + bounds.width / 2,
+    y: bounds.y + bounds.height / 2
+  };
+}
+
+function hasAnyToken(text: string, tokens: string[]): boolean {
+  const itemTokens = new Set(tokenise(normalizeText(text)));
+  return tokens.some((token) => itemTokens.has(token));
+}
+
+function isNearSameLabelColumn(item: ExtractedTextItem, codeItem: ExtractedTextItem): boolean {
+  const itemCenter = item.x + item.width / 2;
+  const codeCenter = codeItem.x + codeItem.width / 2;
+  return Math.abs(itemCenter - codeCenter) <= Math.max(item.width, codeItem.width);
+}
+
+function compareTextItemReadingOrder(
+  left: ExtractedTextItem,
+  right: ExtractedTextItem
+): number {
+  if (Math.abs(left.y - right.y) <= 4) {
+    return left.x - right.x;
+  }
+
+  return left.y - right.y;
+}
+
+function getTextItemBounds(items: ExtractedTextItem[]) {
+  const minX = Math.min(...items.map((item) => item.x));
+  const minY = Math.min(...items.map((item) => item.y));
+  const maxX = Math.max(...items.map((item) => item.x + item.width));
+  const maxY = Math.max(...items.map((item) => item.y + item.height));
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY
   };
 }
 

@@ -19,6 +19,7 @@ type Props = {
   preview?: Preview;
   matches: RoomMatch[];
   selectedRoomId?: string;
+  autoFocusSelectedPin?: boolean;
   onRoomSelect?: (roomId: string | undefined) => void;
   onPinMove?: (roomId: string, x: number, y: number) => void;
 };
@@ -46,6 +47,7 @@ export function FloorPlanViewer({
   preview,
   matches,
   selectedRoomId,
+  autoFocusSelectedPin = false,
   onRoomSelect
 }: Props) {
   const canvasHostRef = useRef<HTMLDivElement>(null);
@@ -124,7 +126,7 @@ export function FloorPlanViewer({
   }, [preview]);
 
   useEffect(() => {
-    if (!selectedMatch || !preview || !stageRef.current) {
+    if (!autoFocusSelectedPin || !selectedMatch || !preview || !stageRef.current) {
       return;
     }
 
@@ -145,7 +147,7 @@ export function FloorPlanViewer({
         viewportHeight: bounds.height
       })
     );
-  }, [preview, selectedMatch]);
+  }, [autoFocusSelectedPin, preview, selectedMatch]);
 
   const inverseScale = 1 / viewTransform.scale;
 
@@ -296,6 +298,10 @@ function PinPopover({
           <dd>{details.status}</dd>
         </div>
         <div>
+          <dt>Source</dt>
+          <dd>{details.source}</dd>
+        </div>
+        <div>
           <dt>Confidence</dt>
           <dd>{details.confidence}</dd>
         </div>
@@ -313,6 +319,7 @@ export function getPinPopoverDetails(match: RoomMatch) {
   return {
     room: match.roomRawName,
     matchedText: match.matchedText ?? "No matched text",
+    source: formatMatchSource(match.matchedSource),
     page: String(match.page ?? 1),
     confidence: `${Math.round(match.confidence * 100)}%`,
     status: match.status,
@@ -450,6 +457,30 @@ function getPinPopoverTransform(
 
 function isInteractivePlanTarget(target: EventTarget): boolean {
   return target instanceof Element && Boolean(target.closest("button, .pin-popover"));
+}
+
+function formatMatchSource(source?: string): string {
+  if (!source) {
+    return "Unknown";
+  }
+
+  if (source === "pdf-text") {
+    return "PDF text";
+  }
+
+  if (source === "ocr:tesseract") {
+    return "Tesseract OCR";
+  }
+
+  if (source === "ocr:paddle") {
+    return "Paddle OCR";
+  }
+
+  if (source === "ocr:tesseract-wasm") {
+    return "tesseract-wasm OCR";
+  }
+
+  return source.startsWith("ocr:") ? `${source.slice("ocr:".length)} OCR` : source;
 }
 
 function clamp(value: number, min: number, max: number): number {

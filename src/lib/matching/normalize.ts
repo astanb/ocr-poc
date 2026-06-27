@@ -1,6 +1,8 @@
 const NON_ALPHANUMERIC = /[^a-z0-9]+/gi;
 const ROOM_CODE_PATTERN =
   /\b(?:room\s+)?([A-Z]{1,4}[\s.-]*(?=[0-9OIL]*\d)[0-9OIL]{1,4}[A-Z]?|\d{1,3}[\s.-]*[A-Z]{1,3})\b/i;
+const ROOM_CODE_GLOBAL_PATTERN =
+  /\b(?:room\s+)?([A-Z]{1,4}[\s.-]*(?=[0-9OIL]*\d)[0-9OIL]{1,4}[A-Z]?|\d{1,3}[\s.-]*[A-Z]{1,3})\b/gi;
 
 export function normalizeText(value: string): string {
   return value
@@ -34,6 +36,17 @@ export function extractRoomCode(value: string): string | undefined {
   }
 
   return normalizeRoomCode(match[1]);
+}
+
+export function extractRoomCodes(value: string): string[] {
+  return [...value.matchAll(ROOM_CODE_GLOBAL_PATTERN)].reduce<string[]>((codes, match) => {
+    if (!match[1]) {
+      return codes;
+    }
+
+    const code = normalizeRoomCode(match[1]);
+    return codes.includes(code) ? codes : [...codes, code];
+  }, []);
 }
 
 export function tokenise(value: string): string[] {

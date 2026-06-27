@@ -24,6 +24,7 @@ type Props = {
   ocrPasses: OcrPreprocessingPass[];
   selectedOcrPassIds: OcrPreprocessingPassId[];
   selectedOcrModes: OcrRunMode[];
+  autoFocusSelectedPin: boolean;
   floorPlanFile?: File;
   excelFile?: File;
   parsedRoomList?: ParsedRoomList;
@@ -37,6 +38,7 @@ type Props = {
   onOcrStrategyChange: (strategyId: OcrStrategyId) => void;
   onOcrPassToggle: (passId: OcrPreprocessingPassId) => void;
   onOcrModeToggle: (mode: OcrRunMode) => void;
+  onAutoFocusSelectedPinToggle: () => void;
   onColumnChange: (column: string) => void;
   onProcess: () => void;
 };
@@ -51,6 +53,7 @@ export function FileUploadPanel({
   ocrPasses,
   selectedOcrPassIds,
   selectedOcrModes,
+  autoFocusSelectedPin,
   floorPlanFile,
   excelFile,
   parsedRoomList,
@@ -64,6 +67,7 @@ export function FileUploadPanel({
   onOcrStrategyChange,
   onOcrPassToggle,
   onOcrModeToggle,
+  onAutoFocusSelectedPinToggle,
   onColumnChange,
   onProcess
 }: Props) {
@@ -171,6 +175,20 @@ export function FileUploadPanel({
               onChange={() => onOcrModeToggle("full-page")}
             />
             <span>Full page</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset className="field checkbox-field">
+        <legend>Inspection</legend>
+        <div className="checkbox-grid compact-checkbox-grid">
+          <label>
+            <input
+              type="checkbox"
+              checked={autoFocusSelectedPin}
+              onChange={onAutoFocusSelectedPinToggle}
+            />
+            <span>Auto-focus selected pin</span>
           </label>
         </div>
       </fieldset>

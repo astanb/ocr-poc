@@ -80,6 +80,7 @@ export function App() {
   const [selectedOcrStrategyId, setSelectedOcrStrategyId] =
     useState<OcrStrategyId>("compare-all");
   const [ocrOptions, setOcrOptions] = useState<OcrOptions>(DEFAULT_OCR_OPTIONS);
+  const [autoFocusSelectedPin, setAutoFocusSelectedPin] = useState(false);
   const [floorPlanFile, setFloorPlanFile] = useState<File>();
   const [excelFile, setExcelFile] = useState<File>();
   const [selectedColumn, setSelectedColumn] = useState("");
@@ -378,6 +379,7 @@ export function App() {
           ocrPasses={OCR_PREPROCESSING_PASSES}
           selectedOcrPassIds={ocrOptions.passIds}
           selectedOcrModes={ocrOptions.modes}
+          autoFocusSelectedPin={autoFocusSelectedPin}
           processingSteps={processingSteps}
           onOcrStrategyChange={setSelectedOcrStrategyId}
           onOcrPassToggle={(passId) => {
@@ -392,6 +394,7 @@ export function App() {
               modes: toggleRequiredValue(current.modes, mode)
             }));
           }}
+          onAutoFocusSelectedPinToggle={() => setAutoFocusSelectedPin((current) => !current)}
           onColumnChange={handleColumnChange}
           onProcess={processFiles}
         />
@@ -400,6 +403,7 @@ export function App() {
           preview={preview}
           matches={matches}
           selectedRoomId={selectedRoomId}
+          autoFocusSelectedPin={autoFocusSelectedPin}
           onRoomSelect={setSelectedRoomId}
           onPinMove={correctMatch}
         />
