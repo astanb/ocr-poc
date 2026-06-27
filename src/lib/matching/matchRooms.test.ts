@@ -115,4 +115,25 @@ describe("matchRooms", () => {
       confidence: 0
     });
   });
+
+  it("does not assign the same candidate to several rooms", () => {
+    const matches = matchRooms(
+      [
+        room("room-2", "GF001A - Circulation", "gf001a circulation", "GF001A"),
+        room("room-1", "GF001 - Circulation", "gf001 circulation", "GF001")
+      ],
+      [candidate("candidate-1", "GF001 Circulation", "gf001 circulation", 10)]
+    );
+
+    expect(matches[0]).toMatchObject({
+      roomId: "room-2",
+      status: "unmatched"
+    });
+    expect(matches[0]).not.toHaveProperty("matchedCandidateId");
+    expect(matches[1]).toMatchObject({
+      roomId: "room-1",
+      matchedCandidateId: "candidate-1",
+      status: "matched"
+    });
+  });
 });

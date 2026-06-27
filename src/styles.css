@@ -163,7 +163,10 @@ small {
 .processing-steps {
   display: grid;
   gap: 6px;
+  max-height: 220px;
   margin-top: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .processing-steps span {
@@ -329,6 +332,12 @@ small {
   background: #3153a4;
 }
 
+.pin-selected {
+  z-index: 4;
+  outline: 3px solid #17202a;
+  outline-offset: 2px;
+}
+
 .table-wrap {
   overflow: auto;
   max-height: 280px;
@@ -385,6 +394,27 @@ td {
   padding: 8px 10px;
   text-align: left;
   vertical-align: top;
+}
+
+.result-row-selected td {
+  background: #eef6f4;
+}
+
+.room-result-button {
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #174f8a;
+  font-weight: 750;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.room-result-button:hover,
+.room-result-button:focus-visible {
+  color: #0f3b68;
 }
 
 th {

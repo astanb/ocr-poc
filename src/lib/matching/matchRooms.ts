@@ -11,37 +11,60 @@ type ScoredCandidate = RoomMatchAlternative & {
   candidate: ExtractedLabelCandidate;
 };
 
+type ScoredRoomCandidate = {
+  room: RoomListItem;
+  score: ScoredCandidate;
+};
+
 export function matchRooms(
   rooms: RoomListItem[],
   candidates: ExtractedLabelCandidate[]
 ): RoomMatch[] {
-  return rooms.map((room) => matchRoom(room, candidates));
+  const scoredByRoom = new Map(
+    rooms.map((room) => [
+      room.id,
+      scoreRoomCandidates(room, candidates)
+    ])
+  );
+  const assignedCandidateIds = new Set<string>();
+  const selectedByRoomId = new Map<string, ScoredCandidate>();
+  const allScores = rooms
+    .flatMap((room): ScoredRoomCandidate[] =>
+      (scoredByRoom.get(room.id) ?? []).map((score) => ({ room, score }))
+    )
+    .toSorted((left, right) => right.score.confidence - left.score.confidence);
+
+  for (const { room, score } of allScores) {
+    if (selectedByRoomId.has(room.id) || assignedCandidateIds.has(score.candidate.id)) {
+      continue;
+    }
+
+    selectedByRoomId.set(room.id, score);
+    assignedCandidateIds.add(score.candidate.id);
+  }
+
+  return rooms.map((room) =>
+    matchRoom(
+      room,
+      selectedByRoomId.get(room.id),
+      scoredByRoom.get(room.id) ?? []
+    )
+  );
 }
 
 function matchRoom(
   room: RoomListItem,
-  candidates: ExtractedLabelCandidate[]
+  best: ScoredCandidate | undefined,
+  scored: ScoredCandidate[]
 ): RoomMatch {
-  const scored = candidates
-    .map((candidate) => scoreCandidate(room, candidate))
-    .filter((score) => score.confidence >= MIN_MATCH_CONFIDENCE)
-    .toSorted((a, b) => b.confidence - a.confidence);
-
-  const best = scored[0];
   if (!best) {
-    return {
-      roomId: room.id,
-      roomRawName: room.rawName,
-      confidence: 0,
-      status: "unmatched",
-      reason: "No candidate reached the minimum confidence threshold."
-    };
+    return createUnmatchedRoomMatch(room);
   }
 
   const alternatives = scored.map(toAlternative);
-  const second = scored[1];
+  const second = scored.find((score) => score.candidate.id !== best.candidate.id);
   const ambiguous =
-    Boolean(second) && best.confidence - second.confidence <= AMBIGUITY_GAP;
+    second !== undefined && best.confidence - second.confidence <= AMBIGUITY_GAP;
 
   return {
     roomId: room.id,
@@ -59,6 +82,26 @@ function matchRoom(
       : best.reason,
     alternatives
   };
+}
+
+function createUnmatchedRoomMatch(room: RoomListItem): RoomMatch {
+  return {
+    roomId: room.id,
+    roomRawName: room.rawName,
+    confidence: 0,
+    status: "unmatched",
+    reason: "No candidate reached the minimum confidence threshold."
+  };
+}
+
+function scoreRoomCandidates(
+  room: RoomListItem,
+  candidates: ExtractedLabelCandidate[]
+): ScoredCandidate[] {
+  return candidates
+    .map((candidate) => scoreCandidate(room, candidate))
+    .filter((score) => score.confidence >= MIN_MATCH_CONFIDENCE)
+    .toSorted((a, b) => b.confidence - a.confidence);
 }
 
 function scoreCandidate(

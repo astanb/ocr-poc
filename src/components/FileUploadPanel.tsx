@@ -139,7 +139,7 @@ export function FileUploadPanel({
 
       {processingSteps.length > 0 && (
         <div className="processing-steps" aria-label="Processing steps">
-          {processingSteps.slice(-8).map((step, index) => (
+          {getDisplayedProcessingSteps(processingSteps).map((step, index) => (
             <span key={`${step.message}-${index}`} className={`step-${step.status}`}>
               {step.message}
             </span>
@@ -172,4 +172,10 @@ export function getSpreadsheetStatus(
     kind: "waiting",
     text: "Waiting for spreadsheet"
   };
+}
+
+export function getDisplayedProcessingSteps(
+  processingSteps: OcrPipelineProgress[]
+): OcrPipelineProgress[] {
+  return processingSteps;
 }

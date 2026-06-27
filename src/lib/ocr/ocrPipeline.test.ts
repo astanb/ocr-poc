@@ -288,4 +288,32 @@ describe("runOcrMatchPipeline", () => {
     expect(result.attempts[0].setupDurationMs).toBe(10_000);
     expect(result.attempts[0].durationMs).toBe(0);
   });
+
+  it("does not merge several room matches onto the same pin coordinate", async () => {
+    const rooms = [
+      room("room-1", "GF001 - Circulation", "gf001 circulation", "GF001"),
+      room("room-2", "GF001A - Circulation", "gf001a circulation", "GF001A")
+    ];
+
+    const result = await runOcrMatchPipeline({
+      image: "fixture",
+      rooms,
+      engines: [
+        engine("first", "First OCR", [
+          item("GF001 Circulation", 10, "ocr:first")
+        ]),
+        engine("second", "Second OCR", [
+          item("GF001A Circulation", 10, "ocr:second")
+        ])
+      ]
+    });
+
+    const pinnedMatches = result.matches.filter((match) => match.x !== undefined);
+
+    expect(pinnedMatches).toHaveLength(1);
+    expect(result.matches[1]).toMatchObject({
+      roomId: "room-2",
+      status: "unmatched"
+    });
+  });
 });

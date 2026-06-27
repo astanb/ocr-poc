@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getSpreadsheetStatus } from "./FileUploadPanel";
+import { getDisplayedProcessingSteps, getSpreadsheetStatus } from "./FileUploadPanel";
 
 describe("getSpreadsheetStatus", () => {
   it("reports detected rooms when the spreadsheet has parsed", () => {
@@ -28,5 +28,29 @@ describe("getSpreadsheetStatus", () => {
       kind: "error",
       text: "Spreadsheet error: Could not read workbook"
     });
+  });
+
+  it("keeps the full processing history available for scrolling", () => {
+    const steps = Array.from({ length: 12 }, (_, index) => ({
+      engineId: "engine",
+      engineLabel: "Engine",
+      status: "completed" as const,
+      message: `step ${index + 1}`
+    }));
+
+    expect(getDisplayedProcessingSteps(steps).map((step) => step.message)).toEqual([
+      "step 1",
+      "step 2",
+      "step 3",
+      "step 4",
+      "step 5",
+      "step 6",
+      "step 7",
+      "step 8",
+      "step 9",
+      "step 10",
+      "step 11",
+      "step 12"
+    ]);
   });
 });

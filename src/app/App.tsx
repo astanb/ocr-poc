@@ -72,6 +72,7 @@ export function App() {
   const [matches, setMatches] = useState<RoomMatch[]>([]);
   const [ocrAttempts, setOcrAttempts] = useState<OcrAttempt[]>([]);
   const [processingSteps, setProcessingSteps] = useState<OcrPipelineProgress[]>([]);
+  const [selectedRoomId, setSelectedRoomId] = useState<string>();
   const [isProcessing, setIsProcessing] = useState(false);
   const [spreadsheetError, setSpreadsheetError] = useState<string>();
   const [errorDetails, setErrorDetails] = useState("");
@@ -252,6 +253,7 @@ export function App() {
     setIsProcessing(true);
     setErrorDetails("");
     setProcessingSteps([]);
+    setSelectedRoomId(undefined);
     setMessage("Processing files locally in the browser...");
 
     try {
@@ -307,6 +309,7 @@ export function App() {
     setMatches([]);
     setOcrAttempts([]);
     setProcessingSteps([]);
+    setSelectedRoomId(undefined);
   }
 
   const exportPayload = useMemo(
@@ -357,12 +360,16 @@ export function App() {
         <FloorPlanViewer
           preview={preview}
           matches={matches}
+          selectedRoomId={selectedRoomId}
+          onRoomSelect={setSelectedRoomId}
           onPinMove={correctMatch}
         />
 
         <ResultsTable
           matches={matches}
           ocrAttempts={ocrAttempts}
+          selectedRoomId={selectedRoomId}
+          onRoomSelect={setSelectedRoomId}
           onExport={exportResults}
         />
       </section>

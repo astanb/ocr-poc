@@ -4,11 +4,20 @@ import type { RoomMatch } from "../types/matching";
 type Props = {
   matches: RoomMatch[];
   ocrAttempts?: OcrAttempt[];
+  selectedRoomId?: string;
+  onRoomSelect?: (roomId: string) => void;
   onExport: () => void;
 };
 
-export function ResultsTable({ matches, ocrAttempts = [], onExport }: Props) {
+export function ResultsTable({
+  matches,
+  ocrAttempts = [],
+  selectedRoomId,
+  onRoomSelect,
+  onExport
+}: Props) {
   const summary = summarizeMatchSources(matches);
+  const sortedOcrAttempts = sortOcrAttemptsByMatches(ocrAttempts);
 
   return (
     <section className="panel results-panel" aria-label="Room match results">
@@ -29,7 +38,7 @@ export function ResultsTable({ matches, ocrAttempts = [], onExport }: Props) {
 
       {ocrAttempts.length > 0 && (
         <div className="ocr-attempt-summary" aria-label="OCR engine summary">
-          {ocrAttempts.map((attempt) => (
+          {sortedOcrAttempts.map((attempt) => (
             <span key={getOcrAttemptKey(attempt)}>
               {formatOcrAttemptSummary(attempt)}
             </span>
@@ -59,8 +68,23 @@ export function ResultsTable({ matches, ocrAttempts = [], onExport }: Props) {
               </tr>
             ) : (
               matches.map((match) => (
-                <tr key={match.roomId}>
-                  <td>{match.roomRawName}</td>
+                <tr
+                  key={match.roomId}
+                  className={match.roomId === selectedRoomId ? "result-row-selected" : undefined}
+                >
+                  <td>
+                    {canSelectRoom(match, onRoomSelect) ? (
+                      <button
+                        type="button"
+                        className="room-result-button"
+                        onClick={() => onRoomSelect?.(match.roomId)}
+                      >
+                        {match.roomRawName}
+                      </button>
+                    ) : (
+                      match.roomRawName
+                    )}
+                  </td>
                   <td>{match.matchedText ?? ""}</td>
                   <td>{formatSource(match.matchedSource)}</td>
                   <td>{match.page ?? ""}</td>
@@ -79,6 +103,16 @@ export function ResultsTable({ matches, ocrAttempts = [], onExport }: Props) {
       </div>
     </section>
   );
+}
+
+export function sortOcrAttemptsByMatches(attempts: OcrAttempt[]): OcrAttempt[] {
+  return attempts
+    .slice()
+    .sort((left, right) =>
+      right.stats.matched - left.stats.matched ||
+      right.stats.ambiguous - left.stats.ambiguous ||
+      left.durationMs - right.durationMs
+    );
 }
 
 export function summarizeMatchSources(matches: RoomMatch[]) {
@@ -175,4 +209,13 @@ function formatEngineName(engineId: string): string {
 
 function formatNumber(value?: number): string {
   return typeof value === "number" ? value.toFixed(1) : "";
+}
+
+function canSelectRoom(
+  match: RoomMatch,
+  onRoomSelect?: (roomId: string) => void
+): boolean {
+  return Boolean(onRoomSelect) &&
+    typeof match.x === "number" &&
+    typeof match.y === "number";
 }

@@ -413,15 +413,45 @@ function chooseBestAttempt(attempts: OcrAttempt[]): OcrAttempt | undefined {
 }
 
 function mergeBestRoomMatches(rooms: RoomListItem[], attempts: OcrAttempt[]): RoomMatch[] {
-  return rooms.map((room) => {
-    const roomMatches = attempts
-      .map((attempt) => attempt.matches.find((match) => match.roomId === room.id))
-      .filter((match): match is RoomMatch => Boolean(match));
+  const selectedByRoomId = new Map<string, RoomMatch>();
+  const usedPinKeys = new Set<string>();
+  const allMatches = rooms
+    .flatMap((room) =>
+      attempts
+        .map((attempt) => attempt.matches.find((match) => match.roomId === room.id))
+        .filter((match): match is RoomMatch => Boolean(match))
+    )
+    .toSorted((left, right) => scoreMatch(right) - scoreMatch(left));
 
-    return roomMatches
-      .slice()
-      .sort((left, right) => scoreMatch(right) - scoreMatch(left))[0];
-  });
+  for (const match of allMatches) {
+    if (selectedByRoomId.has(match.roomId)) {
+      continue;
+    }
+
+    const pinKey = getPinKey(match);
+    if (pinKey && usedPinKeys.has(pinKey)) {
+      continue;
+    }
+
+    selectedByRoomId.set(match.roomId, match);
+    if (pinKey) {
+      usedPinKeys.add(pinKey);
+    }
+  }
+
+  return rooms.map((room) =>
+    selectedByRoomId.get(room.id) ?? createUnmatchedMergedMatch(room)
+  );
+}
+
+function createUnmatchedMergedMatch(room: RoomListItem): RoomMatch {
+  return {
+    roomId: room.id,
+    roomRawName: room.rawName,
+    confidence: 0,
+    status: "unmatched",
+    reason: "No non-overlapping candidate reached the minimum confidence threshold."
+  };
 }
 
 function summarizeMatches(matches: RoomMatch[]): MatchStats {
@@ -450,6 +480,15 @@ function scoreMatch(match: RoomMatch): number {
   }
 
   return match.confidence;
+}
+
+function getPinKey(match: RoomMatch): string | undefined {
+  if (typeof match.x !== "number" || typeof match.y !== "number") {
+    return undefined;
+  }
+
+  const page = match.page ?? 1;
+  return `${page}:${Math.round(match.x)}:${Math.round(match.y)}`;
 }
 
 function averageConfidence(matches: RoomMatch[]): number {

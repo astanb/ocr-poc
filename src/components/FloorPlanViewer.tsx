@@ -18,14 +18,22 @@ type Preview =
 type Props = {
   preview?: Preview;
   matches: RoomMatch[];
+  selectedRoomId?: string;
+  onRoomSelect?: (roomId: string | undefined) => void;
   onPinMove: (roomId: string, x: number, y: number) => void;
 };
 
-export function FloorPlanViewer({ preview, matches, onPinMove }: Props) {
+export function FloorPlanViewer({
+  preview,
+  matches,
+  selectedRoomId,
+  onRoomSelect,
+  onPinMove
+}: Props) {
   const canvasHostRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [draggingRoomId, setDraggingRoomId] = useState<string>();
-  const [selectedRoomId, setSelectedRoomId] = useState<string>();
+  const [internalSelectedRoomId, setInternalSelectedRoomId] = useState<string>();
 
   useEffect(() => {
     if (!canvasHostRef.current || preview?.kind !== "canvas") {
@@ -41,7 +49,8 @@ export function FloorPlanViewer({ preview, matches, onPinMove }: Props) {
     (match) => typeof match.x === "number" && typeof match.y === "number"
       && (match.page ?? 1) === 1
   );
-  const selectedMatch = visibleMatches.find((match) => match.roomId === selectedRoomId);
+  const activeSelectedRoomId = selectedRoomId ?? internalSelectedRoomId;
+  const selectedMatch = visibleMatches.find((match) => match.roomId === activeSelectedRoomId);
 
   function updatePin(roomId: string, clientX: number, clientY: number) {
     if (!stageRef.current || !preview) {
@@ -84,7 +93,7 @@ export function FloorPlanViewer({ preview, matches, onPinMove }: Props) {
             <button
               key={match.roomId}
               type="button"
-              className={`pin pin-${match.status}`}
+              className={`pin pin-${match.status}${match.roomId === activeSelectedRoomId ? " pin-selected" : ""}`}
               style={{
                 left: `${((match.x ?? 0) / preview.width) * 100}%`,
                 top: `${((match.y ?? 0) / preview.height) * 100}%`
@@ -97,7 +106,7 @@ export function FloorPlanViewer({ preview, matches, onPinMove }: Props) {
                 setDraggingRoomId(match.roomId);
               }}
               onClick={() => {
-                setSelectedRoomId(match.roomId);
+                selectRoom(match.roomId);
               }}
             >
               <span>{Math.round(match.confidence * 100)}</span>
@@ -109,12 +118,17 @@ export function FloorPlanViewer({ preview, matches, onPinMove }: Props) {
             match={selectedMatch}
             previewWidth={preview.width}
             previewHeight={preview.height}
-            onClose={() => setSelectedRoomId(undefined)}
+            onClose={() => selectRoom(undefined)}
           />
         )}
       </div>
     </section>
   );
+
+  function selectRoom(roomId: string | undefined) {
+    setInternalSelectedRoomId(roomId);
+    onRoomSelect?.(roomId);
+  }
 }
 
 function PinPopover({
