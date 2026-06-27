@@ -3,6 +3,7 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { DOMParser } from "@xmldom/xmldom";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import { describe, expect, it } from "vitest";
 import type { ExtractedTextItem } from "../../types/floorPlan";
@@ -12,6 +13,8 @@ import { matchRooms } from "../matching/matchRooms";
 import { extractImageText } from "../ocr/extractImageText";
 
 const corpusDir = "/Users/alexstanbury/Downloads/FP_Tests";
+
+globalThis.DOMParser ??= DOMParser as typeof globalThis.DOMParser;
 
 type CorpusResult = {
   set: string;

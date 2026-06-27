@@ -2,6 +2,7 @@
 
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { DOMParser } from "@xmldom/xmldom";
 import { describe, expect, it } from "vitest";
 import { parseRoomList } from "../excel/parseRoomList";
 import { groupTextItems } from "../matching/groupTextItems";
@@ -10,6 +11,8 @@ import { extractImageText } from "../ocr/extractImageText";
 
 const floorPlanPath = "/Users/alexstanbury/Downloads/FP_Tests/1.jpg";
 const roomListPath = "/Users/alexstanbury/Downloads/FP_Tests/1.xlsx";
+
+globalThis.DOMParser ??= DOMParser as typeof globalThis.DOMParser;
 
 const describeIfFixtureExists =
   existsSync(floorPlanPath) && existsSync(roomListPath) ? describe : describe.skip;

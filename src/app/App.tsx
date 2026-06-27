@@ -5,6 +5,13 @@ import { FloorPlanViewer } from "../components/FloorPlanViewer";
 import { ResultsTable } from "../components/ResultsTable";
 import { createExportPayload, downloadJson } from "../lib/export/exportJson";
 import { parseRoomList } from "../lib/excel/parseRoomList";
+import {
+  FLOOR_PLAN_FIXTURES,
+  ROOM_LIST_FIXTURES,
+  getDefaultRoomListIdForFloorPlan,
+  getFixtureById,
+  loadFixtureFile
+} from "../lib/fixtures/fpTestFixtures";
 import { extractImageText } from "../lib/ocr/extractImageText";
 import { extractPdfText } from "../lib/pdf/extractPdfText";
 import { renderPdfPage } from "../lib/pdf/renderPdfPage";
@@ -34,6 +41,8 @@ type Preview =
 const LOW_COLUMN_CONFIDENCE = 0.75;
 
 export function App() {
+  const [selectedFloorPlanId, setSelectedFloorPlanId] = useState(FLOOR_PLAN_FIXTURES[0]?.id ?? "");
+  const [selectedRoomListId, setSelectedRoomListId] = useState(ROOM_LIST_FIXTURES[0]?.id ?? "");
   const [floorPlanFile, setFloorPlanFile] = useState<File>();
   const [excelFile, setExcelFile] = useState<File>();
   const [selectedColumn, setSelectedColumn] = useState("");
@@ -43,6 +52,7 @@ export function App() {
   const [candidates, setCandidates] = useState<ExtractedLabelCandidate[]>([]);
   const [matches, setMatches] = useState<RoomMatch[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [spreadsheetError, setSpreadsheetError] = useState<string>();
   const [message, setMessage] = useState("Upload a floor plan and room list to begin.");
 
   useEffect(() => {
@@ -54,13 +64,95 @@ export function App() {
   }, [preview]);
 
   useEffect(() => {
-    if (!excelFile) {
-      setParsedRoomList(undefined);
-      setSelectedColumn("");
+    if (!selectedFloorPlanId) {
+      setFloorPlanFile(undefined);
+      return;
+    }
+
+    const fixture = getFixtureById(FLOOR_PLAN_FIXTURES, selectedFloorPlanId);
+    if (!fixture) {
+      setFloorPlanFile(undefined);
+      setMessage("Selected floor-plan fixture could not be found.");
       return;
     }
 
     let cancelled = false;
+    setFloorPlanFile(undefined);
+    clearResults();
+    setMessage(`Loading ${fixture.fileName}...`);
+
+    loadFixtureFile(fixture)
+      .then((file) => {
+        if (!cancelled) {
+          setFloorPlanFile(file);
+          setMessage(`Loaded ${fixture.fileName}.`);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setFloorPlanFile(undefined);
+          setMessage(getErrorMessage(error));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFloorPlanId]);
+
+  useEffect(() => {
+    if (!selectedRoomListId) {
+      setExcelFile(undefined);
+      return;
+    }
+
+    const fixture = getFixtureById(ROOM_LIST_FIXTURES, selectedRoomListId);
+    if (!fixture) {
+      setExcelFile(undefined);
+      setMessage("Selected room-list fixture could not be found.");
+      return;
+    }
+
+    let cancelled = false;
+    setExcelFile(undefined);
+    setParsedRoomList(undefined);
+    setSelectedColumn("");
+    setSpreadsheetError(undefined);
+    clearResults();
+    setMessage(`Loading ${fixture.fileName}...`);
+
+    loadFixtureFile(fixture)
+      .then((file) => {
+        if (!cancelled) {
+          setExcelFile(file);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setExcelFile(undefined);
+          setSpreadsheetError(getErrorMessage(error));
+          setMessage(getErrorMessage(error));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedRoomListId]);
+
+  useEffect(() => {
+    if (!excelFile) {
+      setParsedRoomList(undefined);
+      setSelectedColumn("");
+      setSpreadsheetError(undefined);
+      return;
+    }
+
+    let cancelled = false;
+    setParsedRoomList(undefined);
+    setSelectedColumn("");
+    setSpreadsheetError(undefined);
+    setMessage("Reading spreadsheet...");
 
     excelFile
       .arrayBuffer()
@@ -71,9 +163,15 @@ export function App() {
         const parsed = await parseRoomList(buffer);
         setParsedRoomList(parsed);
         setSelectedColumn(parsed.selectedColumn);
+        setSpreadsheetError(undefined);
+        setMessage(`Loaded ${parsed.rooms.length} rooms from the spreadsheet.`);
       })
       .catch((error: unknown) => {
-        setMessage(getErrorMessage(error));
+        const errorMessage = getErrorMessage(error);
+        setParsedRoomList(undefined);
+        setSelectedColumn("");
+        setSpreadsheetError(errorMessage);
+        setMessage(errorMessage);
       });
 
     return () => {
@@ -89,6 +187,15 @@ export function App() {
 
     const parsed = await parseRoomList(await excelFile.arrayBuffer(), column);
     setParsedRoomList(parsed);
+  }
+
+  function handleFloorPlanFixtureChange(fixtureId: string) {
+    setSelectedFloorPlanId(fixtureId);
+    setSelectedRoomListId(getDefaultRoomListIdForFloorPlan(fixtureId));
+  }
+
+  function handleRoomListFixtureChange(fixtureId: string) {
+    setSelectedRoomListId(fixtureId);
   }
 
   async function processFiles() {
@@ -136,6 +243,13 @@ export function App() {
     );
   }
 
+  function clearResults() {
+    setPreview(undefined);
+    setTextItems([]);
+    setCandidates([]);
+    setMatches([]);
+  }
+
   const exportPayload = useMemo(
     () =>
       createExportPayload({
@@ -160,14 +274,19 @@ export function App() {
     <main className="app-shell">
       <section className="workspace">
         <FileUploadPanel
+          floorPlanFixtures={FLOOR_PLAN_FIXTURES}
+          roomListFixtures={ROOM_LIST_FIXTURES}
+          selectedFloorPlanId={selectedFloorPlanId}
+          selectedRoomListId={selectedRoomListId}
           floorPlanFile={floorPlanFile}
           excelFile={excelFile}
           parsedRoomList={parsedRoomList}
+          spreadsheetError={spreadsheetError}
           selectedColumn={selectedColumn}
           shouldConfirmColumn={shouldConfirmColumn}
           isProcessing={isProcessing}
-          onFloorPlanChange={setFloorPlanFile}
-          onExcelChange={setExcelFile}
+          onFloorPlanFixtureChange={handleFloorPlanFixtureChange}
+          onRoomListFixtureChange={handleRoomListFixtureChange}
           onColumnChange={handleColumnChange}
           onProcess={processFiles}
         />

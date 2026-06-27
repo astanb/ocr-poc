@@ -93,7 +93,8 @@ span,
 td,
 th,
 summary,
-label {
+label,
+small {
   font-size: 0.9rem;
 }
 
@@ -102,6 +103,11 @@ label {
 .panel-title-row span,
 .debug-message {
   color: #5d6978;
+}
+
+.upload-actions .status-text-error {
+  color: #a33a2b;
+  font-weight: 650;
 }
 
 .upload-grid {
@@ -118,6 +124,13 @@ label {
 
 .field span {
   font-weight: 650;
+}
+
+.field small {
+  color: #5d6978;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .field input,

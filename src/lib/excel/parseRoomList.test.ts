@@ -14,6 +14,10 @@ function workbookBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
+function textBuffer(text: string): ArrayBuffer {
+  return new TextEncoder().encode(text).buffer;
+}
+
 describe("parseRoomList", () => {
   it("detects a likely room-name column and extracts normalized room items", async () => {
     const parsed = await parseRoomList(
@@ -57,5 +61,45 @@ describe("parseRoomList", () => {
         possibleCode: undefined
       }
     ]);
+  });
+
+  it("parses HTML table exports that have been given a spreadsheet extension", async () => {
+    const parsed = await parseRoomList(
+      textBuffer(`
+        <html>
+          <body>
+            <table>
+              <tr><th>Room Name</th><th>Notes</th></tr>
+              <tr><td>GF017 - Disp. Store</td><td>Keep</td></tr>
+              <tr><td>GF040 - Theatres</td><td>Keep</td></tr>
+            </table>
+          </body>
+        </html>
+      `)
+    );
+
+    expect(parsed.selectedColumn).toBe("Room Name");
+    expect(parsed.rooms).toEqual([
+      {
+        id: "room-2",
+        rawName: "GF017 - Disp. Store",
+        normalizedName: "gf017 disp store",
+        possibleCode: "GF017"
+      },
+      {
+        id: "room-3",
+        rawName: "GF040 - Theatres",
+        normalizedName: "gf040 theatres",
+        possibleCode: "GF040"
+      }
+    ]);
+  });
+
+  it("explains when an old binary XLS workbook is uploaded", async () => {
+    const oldXlsHeader = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]).buffer;
+
+    await expect(parseRoomList(oldXlsHeader)).rejects.toThrow(
+      "older .xls workbook"
+    );
   });
 });
