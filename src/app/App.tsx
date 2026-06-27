@@ -18,6 +18,10 @@ import { extractPdfText } from "../lib/pdf/extractPdfText";
 import { renderPdfPage } from "../lib/pdf/renderPdfPage";
 import { groupTextItems } from "../lib/matching/groupTextItems";
 import { matchRooms } from "../lib/matching/matchRooms";
+import {
+  getRoomsNeedingOcrRetry,
+  mergePdfMatchesWithOcrRetries
+} from "../lib/processing/pdfOcrFallback";
 import type {
   ExtractedLabelCandidate,
   ExtractedTextItem
@@ -235,16 +239,18 @@ export function App() {
 
     try {
       const floorPreview = await buildPreview(floorPlanFile);
-      const extracted = await extractText(floorPlanFile, floorPreview);
-      const grouped = groupTextItems(extracted);
-      const roomMatches = matchRooms(parsedRoomList.rooms, grouped);
+      const processed = await processFloorPlanText(
+        floorPlanFile,
+        floorPreview,
+        parsedRoomList.rooms
+      );
 
       setPreview(floorPreview);
-      setTextItems(extracted);
-      setCandidates(grouped);
-      setMatches(roomMatches);
+      setTextItems(processed.textItems);
+      setCandidates(processed.candidates);
+      setMatches(processed.matches);
       setMessage(
-        `Processed ${parsedRoomList.rooms.length} rooms, ${extracted.length} text items, and ${grouped.length} label candidates.`
+        `Processed ${parsedRoomList.rooms.length} rooms, ${processed.textItems.length} text items, and ${processed.candidates.length} label candidates.`
       );
     } catch (error: unknown) {
       setErrorDetails(formatErrorDetails(error, "Processing error"));
@@ -354,22 +360,47 @@ async function buildPreview(file: File): Promise<Preview> {
   return loadImagePreview(file);
 }
 
-async function extractText(
+async function processFloorPlanText(
   file: File,
-  preview: Preview
-): Promise<ExtractedTextItem[]> {
+  preview: Preview,
+  rooms: ParsedRoomList["rooms"]
+): Promise<{
+  textItems: ExtractedTextItem[];
+  candidates: ExtractedLabelCandidate[];
+  matches: RoomMatch[];
+}> {
   if (isPdf(file)) {
     const pdfText = await extractPdfText(file);
-    if (pdfText.length > 0) {
-      return pdfText;
+    const pdfCandidates = groupTextItems(pdfText);
+    const pdfMatches = matchRooms(rooms, pdfCandidates);
+    const roomsNeedingOcr = getRoomsNeedingOcrRetry(rooms, pdfMatches);
+
+    if (roomsNeedingOcr.length === 0 || preview.kind !== "canvas") {
+      return {
+        textItems: pdfText,
+        candidates: pdfCandidates,
+        matches: pdfMatches
+      };
     }
 
-    if (preview.kind === "canvas") {
-      return extractImageText(preview.canvas);
-    }
+    const ocrText = await extractImageText(preview.canvas);
+    const ocrCandidates = groupTextItems(ocrText);
+    const ocrRetryMatches = matchRooms(roomsNeedingOcr, ocrCandidates);
+
+    return {
+      textItems: [...pdfText, ...ocrText],
+      candidates: [...pdfCandidates, ...ocrCandidates],
+      matches: mergePdfMatchesWithOcrRetries(pdfMatches, ocrRetryMatches)
+    };
   }
 
-  return extractImageText(file);
+  const ocrText = await extractImageText(file);
+  const ocrCandidates = groupTextItems(ocrText);
+  return {
+    textItems: ocrText,
+    candidates: ocrCandidates,
+    matches: matchRooms(rooms, ocrCandidates)
+  };
 }
 
 function loadImagePreview(file: File): Promise<Preview> {

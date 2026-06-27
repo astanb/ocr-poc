@@ -314,6 +314,26 @@ small {
   border-radius: 6px;
 }
 
+.result-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.result-summary span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border: 1px solid #ccd7e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 750;
+  padding: 0 10px;
+}
+
 table {
   width: 100%;
   min-width: 960px;

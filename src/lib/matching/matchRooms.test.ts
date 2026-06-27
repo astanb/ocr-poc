@@ -14,7 +14,8 @@ const candidate = (
   id: string,
   rawText: string,
   normalizedText: string,
-  x: number
+  x: number,
+  source: ExtractedLabelCandidate["source"] = "pdf-text"
 ): ExtractedLabelCandidate => ({
   id,
   rawText,
@@ -24,7 +25,7 @@ const candidate = (
   y: 20,
   width: 80,
   height: 12,
-  source: "pdf-text",
+  source,
   childItems: []
 });
 
@@ -42,8 +43,24 @@ describe("matchRooms", () => {
       roomId: "room-1",
       matchedCandidateId: "candidate-1",
       matchedText: "GF004 General Teaching",
+      matchedSource: "pdf-text",
       confidence: 0.95,
       status: "matched"
+    });
+  });
+
+  it("records OCR as the source when the selected candidate came from OCR", () => {
+    const matches = matchRooms(
+      [room("room-1", "GF004 - General Teaching Area", "gf004 general teaching area", "GF004")],
+      [candidate("candidate-1", "GF004 General Teaching", "gf004 general teaching", 10, "ocr")]
+    );
+
+    expect(matches[0]).toMatchObject({
+      matchedCandidateId: "candidate-1",
+      matchedSource: "ocr"
+    });
+    expect(matches[0]?.alternatives?.[0]).toMatchObject({
+      source: "ocr"
     });
   });
 

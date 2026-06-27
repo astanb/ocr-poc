@@ -3,6 +3,7 @@ export type MatchStatus = "matched" | "ambiguous" | "unmatched" | "corrected";
 export type RoomMatchAlternative = {
   candidateId: string;
   text: string;
+  source?: string;
   x: number;
   y: number;
   confidence: number;
@@ -14,6 +15,7 @@ export type RoomMatch = {
   roomRawName: string;
   matchedCandidateId?: string;
   matchedText?: string;
+  matchedSource?: string;
   page?: number;
   x?: number;
   y?: number;

@@ -48,6 +48,7 @@ function matchRoom(
     roomRawName: room.rawName,
     matchedCandidateId: best.candidate.id,
     matchedText: best.candidate.rawText,
+    matchedSource: best.candidate.source,
     page: best.candidate.page,
     x: best.candidate.x + best.candidate.width / 2,
     y: best.candidate.y + best.candidate.height / 2,
@@ -172,6 +173,7 @@ function toAlternative(score: ScoredCandidate): RoomMatchAlternative {
   return {
     candidateId: score.candidateId,
     text: score.text,
+    source: score.candidate.source,
     x: score.x,
     y: score.y,
     confidence: score.confidence,
