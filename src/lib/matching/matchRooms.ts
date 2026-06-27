@@ -154,6 +154,10 @@ function scoreCandidate(
     return scored(candidate, 0.72, "Code-like fuzzy match.");
   }
 
+  if (hasConflictingRoomCode(roomCode, candidateCodes)) {
+    return scored(candidate, 0, "Candidate contains a different room code.");
+  }
+
   if (
     room.normalizedName.length > 0 &&
     candidate.normalizedText.includes(room.normalizedName)
@@ -229,6 +233,13 @@ function nameWithoutRoomCode(room: RoomListItem): string {
     .split(" ")
     .filter((token) => token !== code)
     .join(" ");
+}
+
+function hasConflictingRoomCode(
+  roomCode: string | undefined,
+  candidateCodes: string[]
+): boolean {
+  return Boolean(roomCode && candidateCodes.length > 0 && !candidateCodes.includes(roomCode));
 }
 
 function scored(

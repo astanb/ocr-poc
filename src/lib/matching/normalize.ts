@@ -1,6 +1,4 @@
 const NON_ALPHANUMERIC = /[^a-z0-9]+/gi;
-const ROOM_CODE_PATTERN =
-  /\b(?:room\s+)?([A-Z]{1,4}[\s.-]*(?=[0-9OIL]*\d)[0-9OIL]{1,4}[A-Z]?|\d{1,3}[\s.-]*[A-Z]{1,3})\b/i;
 const ROOM_CODE_GLOBAL_PATTERN =
   /\b(?:room\s+)?([A-Z]{1,4}[\s.-]*(?=[0-9OIL]*\d)[0-9OIL]{1,4}[A-Z]?|\d{1,3}[\s.-]*[A-Z]{1,3})\b/gi;
 
@@ -30,23 +28,24 @@ export function normalizeRoomCode(value: string): string {
 }
 
 export function extractRoomCode(value: string): string | undefined {
-  const match = value.match(ROOM_CODE_PATTERN);
-  if (!match?.[1]) {
-    return undefined;
-  }
-
-  return normalizeRoomCode(match[1]);
+  return extractRoomCodes(value)[0];
 }
 
 export function extractRoomCodes(value: string): string[] {
   return [...value.matchAll(ROOM_CODE_GLOBAL_PATTERN)].reduce<string[]>((codes, match) => {
-    if (!match[1]) {
+    if (!match[1] || isMeasurementFragment(value, match)) {
       return codes;
     }
 
     const code = normalizeRoomCode(match[1]);
     return codes.includes(code) ? codes : [...codes, code];
   }, []);
+}
+
+function isMeasurementFragment(value: string, match: RegExpMatchArray): boolean {
+  const end = (match.index ?? 0) + match[0].length;
+  const tail = value.slice(end);
+  return /^\.\d+\s*m(?:2|²)?\b/iu.test(tail);
 }
 
 export function tokenise(value: string): string[] {

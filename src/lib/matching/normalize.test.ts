@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractRoomCode, normalizeRoomCode, normalizeText } from "./normalize";
+import { extractRoomCode, extractRoomCodes, normalizeRoomCode, normalizeText } from "./normalize";
 
 describe("normalization", () => {
   it("normalizes text for deterministic comparison", () => {
@@ -24,5 +24,10 @@ describe("normalization", () => {
     expect(extractRoomCode("G.004")).toBe("G004");
     expect(extractRoomCode("Play room GFO40")).toBe("GF040");
     expect(extractRoomCode("Disp. St0re GFOI7")).toBe("GF017");
+  });
+
+  it("does not treat area measurements as room codes", () => {
+    expect(extractRoomCodes("Hub 7.9m2")).toEqual([]);
+    expect(extractRoomCodes("Repro 3.4m2 GF047A")).toEqual(["GF047A"]);
   });
 });

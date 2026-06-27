@@ -169,6 +169,35 @@ describe("matchRooms", () => {
     });
   });
 
+  it("does not use a shared room-name token when the candidate has a conflicting exact room code", () => {
+    const matches = matchRooms(
+      [
+        room("room-1", "GF046 - Hub", "gf046 hub", "GF046"),
+        room("room-2", "GF047A - Repro", "gf047a repro", "GF047A")
+      ],
+      [
+        candidate("candidate-1", "Hub GF046", "hub gf046", 10, "ocr:paddle"),
+        candidate("candidate-2", "GF001J Hub 7.9m2 GF046 Repro", "gf001j hub 7 9m2 gf046 repro", 60, "ocr:paddle"),
+        candidate("candidate-3", "Repro 3.4m2 GF047A", "repro 3 4m2 gf047a", 120, "ocr:paddle")
+      ]
+    );
+
+    expect(matches[0]).toMatchObject({
+      roomId: "room-1",
+      matchedCandidateId: "candidate-1"
+    });
+    expect(matches[1]).toMatchObject({
+      roomId: "room-2",
+      matchedCandidateId: "candidate-3",
+      matchedText: "Repro 3.4m2 GF047A",
+      confidence: 0.98,
+      status: "matched"
+    });
+    expect(matches[1]?.alternatives?.map((alternative) => alternative.candidateId)).not.toContain(
+      "candidate-2"
+    );
+  });
+
   it("localizes a multi-room label candidate to the matched room-code area", () => {
     const multiRoomCandidate = {
       ...candidate(
