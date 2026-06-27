@@ -23,6 +23,42 @@ export function installBrowserPolyfills() {
       return { promise, resolve, reject };
     };
   }
+
+  installReadableStreamAsyncIteratorPolyfill();
 }
 
 installBrowserPolyfills();
+
+function installReadableStreamAsyncIteratorPolyfill() {
+  const readableStreamPrototype = globalThis.ReadableStream?.prototype as
+    | (ReadableStream<unknown> & {
+        [Symbol.asyncIterator]?: () => AsyncIterator<unknown>;
+      })
+    | undefined;
+
+  if (!readableStreamPrototype || readableStreamPrototype[Symbol.asyncIterator]) {
+    return;
+  }
+
+  const asyncIterator = async function* readableStreamIterator(
+    this: ReadableStream<unknown>
+  ) {
+    const reader = this.getReader();
+
+    try {
+      while (true) {
+        const result = await reader.read();
+        if (result.done) {
+          return;
+        }
+
+        yield result.value;
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  };
+
+  readableStreamPrototype[Symbol.asyncIterator] = asyncIterator as
+    typeof readableStreamPrototype[typeof Symbol.asyncIterator];
+}
