@@ -1,5 +1,6 @@
-import { createWorker } from "tesseract.js";
+import { createWorker, PSM } from "tesseract.js";
 import type { ExtractedTextItem } from "../../types/floorPlan";
+import { parseTesseractTsv } from "./parseTesseractTsv";
 
 type TesseractWord = {
   text: string;
@@ -13,14 +14,22 @@ type TesseractWord = {
 };
 
 export async function extractImageText(
-  image: File | Blob | HTMLCanvasElement,
+  image: File | Blob | HTMLCanvasElement | string,
   page = 1
 ): Promise<ExtractedTextItem[]> {
   const worker = await createWorker("eng");
 
   try {
-    const result = await worker.recognize(image);
+    await worker.setParameters({
+      tessedit_pageseg_mode: PSM.SPARSE_TEXT
+    });
+    const result = await worker.recognize(image, {}, { tsv: true, blocks: true });
     const words = getWords(result.data);
+    const tsvItems = parseTesseractTsv(result.data.tsv, page);
+
+    if (tsvItems.length > 0) {
+      return tsvItems;
+    }
 
     return words.flatMap((word): ExtractedTextItem[] => {
       const text = word.text.trim();

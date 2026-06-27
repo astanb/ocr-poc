@@ -1,4 +1,4 @@
-import { readSheet } from "read-excel-file/browser";
+import { readSheet } from "read-excel-file/universal";
 import type { ParsedRoomList, RoomListItem } from "../../types/rooms";
 import { extractRoomCode, normalizeText } from "../matching/normalize";
 

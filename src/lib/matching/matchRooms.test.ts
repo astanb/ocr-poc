@@ -72,4 +72,30 @@ describe("matchRooms", () => {
       status: "unmatched"
     });
   });
+
+  it("uses fuzzy name matching for OCR spelling noise", () => {
+    const matches = matchRooms(
+      [room("room-1", "GF017 - DISP STORE", "gf017 disp store", "GF017")],
+      [candidate("candidate-1", "Disp. St0re GFOI7", "disp st0re gfoi7", 10)]
+    );
+
+    expect(matches[0]).toMatchObject({
+      matchedCandidateId: "candidate-1",
+      status: "matched",
+      confidence: 0.9,
+      reason: "Exact room-code match."
+    });
+  });
+
+  it("does not fuzzy-match a coded room to a candidate with no code", () => {
+    const matches = matchRooms(
+      [room("room-1", "GF004 - CLASS BASES", "gf004 class bases", "GF004")],
+      [candidate("candidate-1", "Early Years Classes", "early years classes", 10)]
+    );
+
+    expect(matches[0]).toMatchObject({
+      status: "unmatched",
+      confidence: 0
+    });
+  });
 });

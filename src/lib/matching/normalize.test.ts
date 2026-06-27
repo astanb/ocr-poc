@@ -13,11 +13,16 @@ describe("normalization", () => {
     expect(normalizeRoomCode("GF-004")).toBe("GF004");
     expect(normalizeRoomCode("G.F.004")).toBe("GF004");
     expect(normalizeRoomCode("G 004")).toBe("G004");
+    expect(normalizeRoomCode("GFO40")).toBe("GF040");
+    expect(normalizeRoomCode("GFOO1J")).toBe("GF001J");
+    expect(normalizeRoomCode("GFOI7")).toBe("GF017");
   });
 
   it("extracts likely room codes from common room labels", () => {
     expect(extractRoomCode("Room GF004 - General Teaching Area")).toBe("GF004");
     expect(extractRoomCode("S-06 Water Treatment Area")).toBe("S06");
     expect(extractRoomCode("G.004")).toBe("G004");
+    expect(extractRoomCode("Play room GFO40")).toBe("GF040");
+    expect(extractRoomCode("Disp. St0re GFOI7")).toBe("GF017");
   });
 });

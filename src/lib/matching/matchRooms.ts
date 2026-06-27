@@ -1,3 +1,4 @@
+import { fuzzy } from "fast-fuzzy";
 import type { ExtractedLabelCandidate } from "../../types/floorPlan";
 import type { RoomMatch, RoomMatchAlternative } from "../../types/matching";
 import type { RoomListItem } from "../../types/rooms";
@@ -104,8 +105,30 @@ function scoreCandidate(
     return scored(candidate, 0.62, "Plausible room-name token overlap.");
   }
 
+  const canUseFuzzyNameMatch = !roomCode || Boolean(candidateCode);
+  const fuzzyScore = canUseFuzzyNameMatch
+    ? Math.max(
+        fuzzy(room.normalizedName, candidate.normalizedText, FUZZY_OPTIONS),
+        fuzzy(nameWithoutRoomCode(room), candidate.normalizedText, FUZZY_OPTIONS)
+      )
+    : 0;
+
+  if (fuzzyScore >= 0.72) {
+    return scored(candidate, 0.68, "Strong fuzzy room-name match.");
+  }
+
+  if (fuzzyScore >= 0.58) {
+    return scored(candidate, 0.6, "Plausible fuzzy room-name match.");
+  }
+
   return scored(candidate, 0, "No meaningful code or name similarity.");
 }
+
+const FUZZY_OPTIONS = {
+  ignoreCase: true,
+  ignoreSymbols: true,
+  normalizeWhitespace: true
+};
 
 function getTokenOverlap(roomTokens: string[], candidateTokens: string[]): number {
   if (roomTokens.length === 0) {
@@ -115,6 +138,18 @@ function getTokenOverlap(roomTokens: string[], candidateTokens: string[]): numbe
   const candidateSet = new Set(candidateTokens);
   const matched = roomTokens.filter((token) => candidateSet.has(token)).length;
   return matched / roomTokens.length;
+}
+
+function nameWithoutRoomCode(room: RoomListItem): string {
+  if (!room.possibleCode) {
+    return room.normalizedName;
+  }
+
+  const code = room.possibleCode.toLowerCase();
+  return room.normalizedName
+    .split(" ")
+    .filter((token) => token !== code)
+    .join(" ");
 }
 
 function scored(

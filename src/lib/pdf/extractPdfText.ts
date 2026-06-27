@@ -10,11 +10,35 @@ type PdfTextItem = {
 
 export async function extractPdfText(
   file: File,
-  pageNumber = 1,
+  pageNumber?: number,
   scale = 1.5
 ): Promise<ExtractedTextItem[]> {
   const data = await file.arrayBuffer();
+  return extractPdfTextFromArrayBuffer(data, pageNumber, scale);
+}
+
+export async function extractPdfTextFromArrayBuffer(
+  data: ArrayBuffer | Uint8Array,
+  pageNumber?: number,
+  scale = 1.5
+): Promise<ExtractedTextItem[]> {
   const document = await pdfjsLib.getDocument({ data }).promise;
+  const pageNumbers =
+    pageNumber === undefined
+      ? Array.from({ length: document.numPages }, (_, index) => index + 1)
+      : [pageNumber];
+  const items = await Promise.all(
+    pageNumbers.map((currentPage) => extractPdfPageText(document, currentPage, scale))
+  );
+
+  return items.flat();
+}
+
+async function extractPdfPageText(
+  document: Awaited<ReturnType<typeof pdfjsLib.getDocument>["promise"]>,
+  pageNumber: number,
+  scale: number
+): Promise<ExtractedTextItem[]> {
   const page = await document.getPage(pageNumber);
   const viewport = page.getViewport({ scale });
   const content = await page.getTextContent();

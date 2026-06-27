@@ -1,6 +1,6 @@
 const NON_ALPHANUMERIC = /[^a-z0-9]+/gi;
 const ROOM_CODE_PATTERN =
-  /\b(?:room\s+)?([A-Z]{1,3}(?:[\s.-]*[A-Z])?[\s.-]*\d{2,4}[A-Z]?|\d{1,3}[\s.-]*[A-Z]{1,3})\b/i;
+  /\b(?:room\s+)?([A-Z]{1,4}[\s.-]*(?=[0-9OIL]*\d)[0-9OIL]{1,4}[A-Z]?|\d{1,3}[\s.-]*[A-Z]{1,3})\b/i;
 
 export function normalizeText(value: string): string {
   return value
@@ -11,7 +11,20 @@ export function normalizeText(value: string): string {
 }
 
 export function normalizeRoomCode(value: string): string {
-  return value.replace(NON_ALPHANUMERIC, "").toUpperCase();
+  const compact = value.replace(NON_ALPHANUMERIC, "").toUpperCase();
+  const match = compact.match(/^([A-Z]+)([0-9OIL]+)([A-Z]?)$/);
+  if (!match) {
+    return compact;
+  }
+
+  let prefix = match[1];
+  let digits = match[2];
+  while (prefix.length > 2 && /[OIL]$/u.test(prefix) && digits.length < 4) {
+    prefix = prefix.slice(0, -1);
+    digits = `${match[1].at(prefix.length)}${digits}`;
+  }
+
+  return `${prefix}${digits.replaceAll("O", "0").replaceAll("I", "1").replaceAll("L", "1")}${match[3]}`;
 }
 
 export function extractRoomCode(value: string): string | undefined {

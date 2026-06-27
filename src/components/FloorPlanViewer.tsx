@@ -38,6 +38,7 @@ export function FloorPlanViewer({ preview, matches, onPinMove }: Props) {
 
   const visibleMatches = matches.filter(
     (match) => typeof match.x === "number" && typeof match.y === "number"
+      && (match.page ?? 1) === 1
   );
 
   function updatePin(roomId: string, clientX: number, clientY: number) {
