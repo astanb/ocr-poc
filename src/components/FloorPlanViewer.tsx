@@ -38,6 +38,20 @@ type PanDrag = {
   startPanY: number;
 };
 
+type TouchGesture =
+  | {
+      mode: "pan";
+      startX: number;
+      startY: number;
+      startPanX: number;
+      startPanY: number;
+    }
+  | {
+      mode: "pinch";
+      startDistance: number;
+      startTransform: ViewTransform;
+    };
+
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
 const FOCUS_ZOOM = 2;
@@ -62,6 +76,7 @@ export function FloorPlanViewer({
   const [isAnimatingToSelection, setIsAnimatingToSelection] = useState(false);
   const previewRef = useRef(preview);
   const viewTransformRef = useRef(viewTransform);
+  const touchGestureRef = useRef<TouchGesture | undefined>(undefined);
 
   useEffect(() => {
     previewRef.current = preview;
@@ -109,7 +124,92 @@ export function FloorPlanViewer({
     }
 
     stageElement.addEventListener("wheel", handleWheel, { passive: false });
-    return () => stageElement.removeEventListener("wheel", handleWheel);
+
+    function handleTouchStart(event: TouchEvent) {
+      if (!previewRef.current || !event.target || isInteractivePlanTarget(event.target)) {
+        return;
+      }
+
+      if (event.touches.length === 1) {
+        const touch = event.touches[0];
+        touchGestureRef.current = {
+          mode: "pan",
+          startX: touch.clientX,
+          startY: touch.clientY,
+          startPanX: viewTransformRef.current.panX,
+          startPanY: viewTransformRef.current.panY
+        };
+        setIsAnimatingToSelection(false);
+        return;
+      }
+
+      if (event.touches.length === 2) {
+        touchGestureRef.current = {
+          mode: "pinch",
+          startDistance: getTouchDistance(event.touches),
+          startTransform: viewTransformRef.current
+        };
+        setIsAnimatingToSelection(false);
+      }
+    }
+
+    function handleTouchMove(event: TouchEvent) {
+      if (!previewRef.current || !touchGestureRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      const bounds = stageElement.getBoundingClientRect();
+
+      if (touchGestureRef.current.mode === "pan" && event.touches.length === 1) {
+        const touch = event.touches[0];
+        setViewTransform(
+          getTouchPanTransform({
+            current: viewTransformRef.current,
+            startPanX: touchGestureRef.current.startPanX,
+            startPanY: touchGestureRef.current.startPanY,
+            deltaX: touch.clientX - touchGestureRef.current.startX,
+            deltaY: touch.clientY - touchGestureRef.current.startY,
+            viewportWidth: bounds.width,
+            viewportHeight: bounds.height
+          })
+        );
+        return;
+      }
+
+      if (touchGestureRef.current.mode === "pinch" && event.touches.length === 2) {
+        const midpoint = getTouchMidpoint(event.touches);
+        setViewTransform(
+          getPinchZoomTransform({
+            startTransform: touchGestureRef.current.startTransform,
+            scaleRatio: getTouchDistance(event.touches) / touchGestureRef.current.startDistance,
+            originX: midpoint.x - bounds.left,
+            originY: midpoint.y - bounds.top,
+            viewportWidth: bounds.width,
+            viewportHeight: bounds.height
+          })
+        );
+      }
+    }
+
+    function handleTouchEnd(event: TouchEvent) {
+      if (event.touches.length === 0) {
+        touchGestureRef.current = undefined;
+      }
+    }
+
+    stageElement.addEventListener("touchstart", handleTouchStart, { passive: false });
+    stageElement.addEventListener("touchmove", handleTouchMove, { passive: false });
+    stageElement.addEventListener("touchend", handleTouchEnd);
+    stageElement.addEventListener("touchcancel", handleTouchEnd);
+
+    return () => {
+      stageElement.removeEventListener("wheel", handleWheel);
+      stageElement.removeEventListener("touchstart", handleTouchStart);
+      stageElement.removeEventListener("touchmove", handleTouchMove);
+      stageElement.removeEventListener("touchend", handleTouchEnd);
+      stageElement.removeEventListener("touchcancel", handleTouchEnd);
+    };
   }, []);
 
   const visibleMatches = matches.filter(
@@ -122,6 +222,7 @@ export function FloorPlanViewer({
   useEffect(() => {
     setViewTransform({ scale: 1, panX: 0, panY: 0 });
     setPanDrag(undefined);
+    touchGestureRef.current = undefined;
     setIsAnimatingToSelection(false);
   }, [preview]);
 
@@ -424,6 +525,61 @@ export function getWheelZoomTransform({
   });
 }
 
+export function getTouchPanTransform({
+  current,
+  startPanX,
+  startPanY,
+  deltaX,
+  deltaY,
+  viewportWidth,
+  viewportHeight
+}: {
+  current: ViewTransform;
+  startPanX: number;
+  startPanY: number;
+  deltaX: number;
+  deltaY: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}): ViewTransform {
+  return constrainViewTransform({
+    transform: {
+      ...current,
+      panX: startPanX + deltaX,
+      panY: startPanY + deltaY
+    },
+    viewportWidth,
+    viewportHeight
+  });
+}
+
+export function getPinchZoomTransform({
+  startTransform,
+  scaleRatio,
+  originX,
+  originY,
+  viewportWidth,
+  viewportHeight
+}: {
+  startTransform: ViewTransform;
+  scaleRatio: number;
+  originX: number;
+  originY: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}): ViewTransform {
+  return constrainViewTransform({
+    transform: zoomViewTransform({
+      current: startTransform,
+      nextScale: clamp(startTransform.scale * scaleRatio, MIN_ZOOM, MAX_ZOOM),
+      originX,
+      originY
+    }),
+    viewportWidth,
+    viewportHeight
+  });
+}
+
 export function constrainViewTransform({
   transform,
   viewportWidth,
@@ -457,6 +613,21 @@ function getPinPopoverTransform(
 
 function isInteractivePlanTarget(target: EventTarget): boolean {
   return target instanceof Element && Boolean(target.closest("button, .pin-popover"));
+}
+
+function getTouchDistance(touches: TouchList): number {
+  const first = touches[0];
+  const second = touches[1];
+  return Math.hypot(first.clientX - second.clientX, first.clientY - second.clientY);
+}
+
+function getTouchMidpoint(touches: TouchList): { x: number; y: number } {
+  const first = touches[0];
+  const second = touches[1];
+  return {
+    x: (first.clientX + second.clientX) / 2,
+    y: (first.clientY + second.clientY) / 2
+  };
 }
 
 function formatMatchSource(source?: string): string {

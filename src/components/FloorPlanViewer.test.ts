@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   constrainViewTransform,
   getCenteredViewTransform,
+  getPinchZoomTransform,
   getPinPopoverDetails,
   getPinPopoverPosition,
   getSelectionFocusScale,
+  getTouchPanTransform,
   getWheelZoomTransform,
   zoomViewTransform
 } from "./FloorPlanViewer";
@@ -111,6 +113,41 @@ describe("floor plan view transforms", () => {
       scale: 2,
       panX: 0,
       panY: -500
+    });
+  });
+
+  it("pans from a one-finger touch gesture", () => {
+    expect(
+      getTouchPanTransform({
+        current: { scale: 2, panX: -200, panY: -100 },
+        startPanX: -200,
+        startPanY: -100,
+        deltaX: 40,
+        deltaY: -30,
+        viewportWidth: 1000,
+        viewportHeight: 500
+      })
+    ).toEqual({
+      scale: 2,
+      panX: -160,
+      panY: -130
+    });
+  });
+
+  it("pinch-zooms around the touch midpoint", () => {
+    expect(
+      getPinchZoomTransform({
+        startTransform: { scale: 1, panX: 0, panY: 0 },
+        scaleRatio: 1.5,
+        originX: 500,
+        originY: 250,
+        viewportWidth: 1000,
+        viewportHeight: 500
+      })
+    ).toEqual({
+      scale: 1.5,
+      panX: -250,
+      panY: -125
     });
   });
 
