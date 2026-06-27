@@ -39,6 +39,7 @@ type PanDrag = {
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 8;
+const FOCUS_ZOOM = 2;
 const ZOOM_STEP = 1.18;
 
 export function FloorPlanViewer({
@@ -56,6 +57,7 @@ export function FloorPlanViewer({
     panY: 0
   });
   const [panDrag, setPanDrag] = useState<PanDrag>();
+  const [isAnimatingToSelection, setIsAnimatingToSelection] = useState(false);
 
   useEffect(() => {
     if (!canvasHostRef.current || preview?.kind !== "canvas") {
@@ -77,6 +79,7 @@ export function FloorPlanViewer({
   useEffect(() => {
     setViewTransform({ scale: 1, panX: 0, panY: 0 });
     setPanDrag(undefined);
+    setIsAnimatingToSelection(false);
   }, [preview]);
 
   useEffect(() => {
@@ -85,15 +88,20 @@ export function FloorPlanViewer({
     }
 
     const bounds = stageRef.current.getBoundingClientRect();
+    setIsAnimatingToSelection(true);
     setViewTransform((current) =>
-      getCenteredViewTransform({
-        currentScale: Math.max(current.scale, 2),
-        previewWidth: preview.width,
-        previewHeight: preview.height,
+      constrainViewTransform({
+        transform: getCenteredViewTransform({
+          currentScale: getSelectionFocusScale(current.scale),
+          previewWidth: preview.width,
+          previewHeight: preview.height,
+          viewportWidth: bounds.width,
+          viewportHeight: bounds.height,
+          x: selectedMatch.x ?? 0,
+          y: selectedMatch.y ?? 0
+        }),
         viewportWidth: bounds.width,
-        viewportHeight: bounds.height,
-        x: selectedMatch.x ?? 0,
-        y: selectedMatch.y ?? 0
+        viewportHeight: bounds.height
       })
     );
   }, [preview, selectedMatch]);
@@ -123,12 +131,17 @@ export function FloorPlanViewer({
             MIN_ZOOM,
             MAX_ZOOM
           );
+          setIsAnimatingToSelection(false);
           setViewTransform((current) =>
-            zoomViewTransform({
-              current,
-              nextScale,
-              originX: event.clientX - bounds.left,
-              originY: event.clientY - bounds.top
+            constrainViewTransform({
+              transform: zoomViewTransform({
+                current,
+                nextScale,
+                originX: event.clientX - bounds.left,
+                originY: event.clientY - bounds.top
+              }),
+              viewportWidth: bounds.width,
+              viewportHeight: bounds.height
             })
           );
         }}
@@ -138,6 +151,7 @@ export function FloorPlanViewer({
           }
 
           event.currentTarget.setPointerCapture(event.pointerId);
+          setIsAnimatingToSelection(false);
           setPanDrag({
             pointerId: event.pointerId,
             startX: event.clientX,
@@ -151,11 +165,18 @@ export function FloorPlanViewer({
             return;
           }
 
-          setViewTransform((current) => ({
-            ...current,
-            panX: panDrag.startPanX + event.clientX - panDrag.startX,
-            panY: panDrag.startPanY + event.clientY - panDrag.startY
-          }));
+          const bounds = event.currentTarget.getBoundingClientRect();
+          setViewTransform((current) =>
+            constrainViewTransform({
+              transform: {
+                ...current,
+                panX: panDrag.startPanX + event.clientX - panDrag.startX,
+                panY: panDrag.startPanY + event.clientY - panDrag.startY
+              },
+              viewportWidth: bounds.width,
+              viewportHeight: bounds.height
+            })
+          );
         }}
         onPointerUp={() => setPanDrag(undefined)}
         onPointerCancel={() => setPanDrag(undefined)}
@@ -163,10 +184,11 @@ export function FloorPlanViewer({
         {!preview && <div className="empty-state">No floor plan rendered yet</div>}
         {preview && (
           <div
-            className="floor-plan-content"
+            className={`floor-plan-content${isAnimatingToSelection ? " floor-plan-content-animated" : ""}`}
             style={{
               transform: `translate(${viewTransform.panX}px, ${viewTransform.panY}px) scale(${viewTransform.scale})`
             }}
+            onTransitionEnd={() => setIsAnimatingToSelection(false)}
           >
             {preview.kind === "image" && (
               <img className="floor-plan-media" src={preview.url} alt="Uploaded floor plan" />
@@ -345,6 +367,29 @@ export function zoomViewTransform({
     panX: originX - contentX * nextScale,
     panY: originY - contentY * nextScale
   };
+}
+
+export function constrainViewTransform({
+  transform,
+  viewportWidth,
+  viewportHeight
+}: {
+  transform: ViewTransform;
+  viewportWidth: number;
+  viewportHeight: number;
+}): ViewTransform {
+  const minPanX = viewportWidth - viewportWidth * transform.scale;
+  const minPanY = viewportHeight - viewportHeight * transform.scale;
+
+  return {
+    scale: transform.scale,
+    panX: clamp(transform.panX, minPanX, 0),
+    panY: clamp(transform.panY, minPanY, 0)
+  };
+}
+
+export function getSelectionFocusScale(currentScale: number): number {
+  return Math.max(currentScale, FOCUS_ZOOM);
 }
 
 function getPinPopoverTransform(

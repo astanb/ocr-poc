@@ -265,6 +265,10 @@ small {
   will-change: transform;
 }
 
+.floor-plan-content-animated {
+  transition: transform 220ms ease-out;
+}
+
 .floor-plan-media {
   display: block;
   object-fit: contain;

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  constrainViewTransform,
   getCenteredViewTransform,
   getPinPopoverDetails,
   getPinPopoverPosition,
+  getSelectionFocusScale,
   zoomViewTransform
 } from "./FloorPlanViewer";
 import type { RoomMatch } from "../types/matching";
@@ -76,5 +78,24 @@ describe("floor plan view transforms", () => {
       panX: -300,
       panY: -175
     });
+  });
+
+  it("constrains panning so the floor plan stays against the viewport edges", () => {
+    expect(
+      constrainViewTransform({
+        transform: { scale: 2, panX: 200, panY: -700 },
+        viewportWidth: 1000,
+        viewportHeight: 500
+      })
+    ).toEqual({
+      scale: 2,
+      panX: 0,
+      panY: -500
+    });
+  });
+
+  it("keeps the existing zoom level when selecting a pin past the focus zoom", () => {
+    expect(getSelectionFocusScale(1)).toBe(2);
+    expect(getSelectionFocusScale(3.5)).toBe(3.5);
   });
 });
