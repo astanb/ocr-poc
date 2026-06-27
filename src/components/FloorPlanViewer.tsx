@@ -39,6 +39,11 @@ type PanDrag = {
   startPanY: number;
 };
 
+type StageSize = {
+  width: number;
+  height: number;
+};
+
 type TouchGesture =
   | {
       mode: "pan";
@@ -73,6 +78,7 @@ export function FloorPlanViewer({
     panX: 0,
     panY: 0
   });
+  const [stageSize, setStageSize] = useState<StageSize>({ width: 0, height: 0 });
   const [panDrag, setPanDrag] = useState<PanDrag>();
   const [isAnimatingToSelection, setIsAnimatingToSelection] = useState(false);
   const previewRef = useRef(preview);
@@ -96,6 +102,23 @@ export function FloorPlanViewer({
     host.replaceChildren(preview.canvas);
     preview.canvas.className = "floor-plan-media";
   }, [preview]);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    const updateStageSize = () => {
+      const bounds = stage.getBoundingClientRect();
+      setStageSize({ width: bounds.width, height: bounds.height });
+    };
+
+    updateStageSize();
+    const resizeObserver = new ResizeObserver(updateStageSize);
+    resizeObserver.observe(stage);
+    return () => resizeObserver.disconnect();
+  }, []);
 
   useEffect(() => {
     const currentStage = stageRef.current;
@@ -219,6 +242,7 @@ export function FloorPlanViewer({
   );
   const activeSelectedRoomId = selectedRoomId ?? internalSelectedRoomId;
   const selectedMatch = visibleMatches.find((match) => match.roomId === activeSelectedRoomId);
+  const canProjectOverlay = Boolean(preview && stageSize.width > 0 && stageSize.height > 0);
 
   useEffect(() => {
     setViewTransform({ scale: 1, panX: 0, panY: 0 });
@@ -250,8 +274,6 @@ export function FloorPlanViewer({
       })
     );
   }, [autoFocusSelectedPin, preview, selectedMatch]);
-
-  const inverseScale = 1 / viewTransform.scale;
 
   return (
     <section className="panel viewer-panel" aria-label="Floor plan viewer">
@@ -302,54 +324,81 @@ export function FloorPlanViewer({
       >
         {!preview && <div className="empty-state">No floor plan rendered yet</div>}
         {preview && (
-          <div
-            className={`floor-plan-content${isAnimatingToSelection ? " floor-plan-content-animated" : ""}`}
-            style={{
-              transform: `translate(${viewTransform.panX}px, ${viewTransform.panY}px) scale(${viewTransform.scale})`
-            }}
-            onTransitionEnd={() => setIsAnimatingToSelection(false)}
-          >
-            {preview.kind === "image" && (
-              <img className="floor-plan-media" src={preview.url} alt="Uploaded floor plan" />
-            )}
-            {preview.kind === "canvas" && preview.displayUrl && (
-              <img className="floor-plan-media" src={preview.displayUrl} alt="Rendered PDF floor plan" />
-            )}
-            {preview.kind === "canvas" && !preview.displayUrl && <div ref={canvasHostRef} />}
+          <>
+            <div
+              className={`floor-plan-content${isAnimatingToSelection ? " floor-plan-content-animated" : ""}`}
+              style={{
+                transform: `translate(${viewTransform.panX}px, ${viewTransform.panY}px) scale(${viewTransform.scale})`
+              }}
+              onTransitionEnd={() => setIsAnimatingToSelection(false)}
+            >
+              {preview.kind === "image" && (
+                <img className="floor-plan-media" src={preview.url} alt="Uploaded floor plan" />
+              )}
+              {preview.kind === "canvas" && preview.displayUrl && (
+                <img className="floor-plan-media" src={preview.displayUrl} alt="Rendered PDF floor plan" />
+              )}
+              {preview.kind === "canvas" && !preview.displayUrl && <div ref={canvasHostRef} />}
+            </div>
 
-            {visibleMatches
-              .filter((match) => match.roomId !== activeSelectedRoomId)
-              .map((match) => (
-                <button
-                  key={match.roomId}
-                  type="button"
-                  className={`pin pin-${match.status}`}
-                  style={{
-                    left: `${((match.x ?? 0) / preview.width) * 100}%`,
-                    top: `${((match.y ?? 0) / preview.height) * 100}%`,
-                    transform: `translate(-50%, -50%) scale(${inverseScale})`
-                  }}
-                  title={`${match.roomRawName}\n${match.matchedText ?? "No matched text"}\n${Math.round(
-                    match.confidence * 100
-                  )}%`}
-                  onClick={() => {
-                    selectRoom(match.roomId);
-                  }}
-                >
-                  <span>{Math.round(match.confidence * 100)}</span>
-                </button>
-              ))}
+            {canProjectOverlay && (
+              <div className="floor-plan-overlay">
+                {visibleMatches
+                  .filter((match) => match.roomId !== activeSelectedRoomId)
+                  .map((match) => {
+                    const point = getScreenPoint({
+                      x: match.x ?? 0,
+                      y: match.y ?? 0,
+                      previewWidth: preview.width,
+                      previewHeight: preview.height,
+                      viewportWidth: stageSize.width,
+                      viewportHeight: stageSize.height,
+                      transform: viewTransform
+                    });
 
-            {selectedMatch && (
-              <PinPopover
-                match={selectedMatch}
-                previewWidth={preview.width}
-                previewHeight={preview.height}
-                inverseScale={inverseScale}
-                onClose={() => selectRoom(undefined)}
-              />
+                    return (
+                      <button
+                        key={match.roomId}
+                        type="button"
+                        className={`pin pin-${match.status}`}
+                        style={{
+                          left: `${point.x}px`,
+                          top: `${point.y}px`
+                        }}
+                        title={`${match.roomRawName}\n${match.matchedText ?? "No matched text"}\n${Math.round(
+                          match.confidence * 100
+                        )}%`}
+                        onClick={() => {
+                          selectRoom(match.roomId);
+                        }}
+                      >
+                        <span>{Math.round(match.confidence * 100)}</span>
+                      </button>
+                    );
+                  })}
+
+                {selectedMatch && (
+                  <PinPopover
+                    match={selectedMatch}
+                    position={getPinPopoverScreenPosition({
+                      point: getScreenPoint({
+                        x: selectedMatch.x ?? 0,
+                        y: selectedMatch.y ?? 0,
+                        previewWidth: preview.width,
+                        previewHeight: preview.height,
+                        viewportWidth: stageSize.width,
+                        viewportHeight: stageSize.height,
+                        transform: viewTransform
+                      }),
+                      viewportWidth: stageSize.width,
+                      viewportHeight: stageSize.height
+                    })}
+                    onClose={() => selectRoom(undefined)}
+                  />
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </section>
@@ -363,27 +412,21 @@ export function FloorPlanViewer({
 
 function PinPopover({
   match,
-  previewWidth,
-  previewHeight,
-  inverseScale,
+  position,
   onClose
 }: {
   match: RoomMatch;
-  previewWidth: number;
-  previewHeight: number;
-  inverseScale: number;
+  position: ReturnType<typeof getPinPopoverScreenPosition>;
   onClose: () => void;
 }) {
   const details = getPinPopoverDetails(match);
-  const position = getPinPopoverPosition(match, previewWidth, previewHeight);
 
   return (
     <aside
       className={`pin-popover pin-popover-${position.placement}`}
       style={{
-        left: `${position.left}%`,
-        top: `${position.top}%`,
-        transform: getPinPopoverTransform(position.placement, inverseScale)
+        left: `${position.left}px`,
+        top: `${position.top}px`
       }}
       aria-label={`Details for ${details.room}`}
     >
@@ -444,6 +487,47 @@ export function getPinPopoverPosition(
   return {
     left,
     top: clamp(top, 8, 92),
+    placement
+  };
+}
+
+export function getScreenPoint({
+  x,
+  y,
+  previewWidth,
+  previewHeight,
+  viewportWidth,
+  viewportHeight,
+  transform
+}: {
+  x: number;
+  y: number;
+  previewWidth: number;
+  previewHeight: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  transform: ViewTransform;
+}): { x: number; y: number } {
+  return {
+    x: transform.panX + (x / previewWidth) * viewportWidth * transform.scale,
+    y: transform.panY + (y / previewHeight) * viewportHeight * transform.scale
+  };
+}
+
+function getPinPopoverScreenPosition({
+  point,
+  viewportWidth,
+  viewportHeight
+}: {
+  point: { x: number; y: number };
+  viewportWidth: number;
+  viewportHeight: number;
+}) {
+  const placement = point.y < viewportHeight * 0.28 ? "below" : "above";
+
+  return {
+    left: clamp(point.x, 140, Math.max(140, viewportWidth - 140)),
+    top: clamp(point.y, 32, Math.max(32, viewportHeight - 32)),
     placement
   };
 }
@@ -605,14 +689,6 @@ export function constrainViewTransform({
 
 export function getSelectionFocusScale(currentScale: number): number {
   return Math.max(currentScale, FOCUS_ZOOM);
-}
-
-function getPinPopoverTransform(
-  placement: ReturnType<typeof getPinPopoverPosition>["placement"],
-  inverseScale: number
-): string {
-  const yOffset = placement === "below" ? "22px" : "calc(-100% - 22px)";
-  return `translate(-50%, ${yOffset}) scale(${inverseScale})`;
 }
 
 function isInteractivePlanTarget(target: EventTarget): boolean {

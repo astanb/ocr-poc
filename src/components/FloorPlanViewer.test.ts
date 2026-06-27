@@ -5,6 +5,7 @@ import {
   getPinchZoomTransform,
   getPinPopoverDetails,
   getPinPopoverPosition,
+  getScreenPoint,
   getSelectionFocusScale,
   getTouchPanTransform,
   getWheelZoomTransform,
@@ -47,6 +48,23 @@ describe("getPinPopoverDetails", () => {
       left: 90,
       top: 92,
       placement: "above"
+    });
+  });
+
+  it("projects floor-plan coordinates into the unscaled overlay", () => {
+    expect(
+      getScreenPoint({
+        x: 500,
+        y: 250,
+        previewWidth: 1000,
+        previewHeight: 500,
+        viewportWidth: 800,
+        viewportHeight: 400,
+        transform: { scale: 2, panX: -100, panY: -50 }
+      })
+    ).toEqual({
+      x: 700,
+      y: 350
     });
   });
 });

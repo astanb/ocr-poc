@@ -262,11 +262,16 @@ small {
 .floor-plan-content {
   position: relative;
   transform-origin: 0 0;
-  will-change: transform;
 }
 
 .floor-plan-content-animated {
   transition: transform 220ms ease-out;
+}
+
+.floor-plan-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
 .floor-plan-media {
@@ -294,6 +299,8 @@ small {
   border: 2px solid #fff;
   border-radius: 999px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.28);
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
   touch-action: none;
 }
 
@@ -314,6 +321,8 @@ small {
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.22);
   color: #17202a;
   padding: 10px;
+  pointer-events: auto;
+  transform: translate(-50%, calc(-100% - 22px));
   transform-origin: 50% 100%;
 }
 
@@ -331,6 +340,7 @@ small {
 }
 
 .pin-popover-below {
+  transform: translate(-50%, 22px);
   transform-origin: 50% 0;
 }
 
