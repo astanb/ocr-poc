@@ -167,15 +167,6 @@ small {
   font-weight: 650;
 }
 
-.checkbox-grid input {
-  flex: 0 0 auto;
-  width: 13px;
-  height: 13px;
-  min-height: 13px;
-  margin: 0;
-  accent-color: #1f8f72;
-}
-
 .field input,
 .field select {
   width: 100%;
@@ -183,6 +174,16 @@ small {
   border-radius: 6px;
   min-height: 38px;
   padding: 7px 9px;
+}
+
+.checkbox-grid input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  min-height: 10px;
+  margin: 0;
+  padding: 0;
+  accent-color: #1f8f72;
 }
 
 .compact-field {
