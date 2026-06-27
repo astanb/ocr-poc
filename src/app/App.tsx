@@ -4,6 +4,7 @@ import { FileUploadPanel } from "../components/FileUploadPanel";
 import { FloorPlanViewer } from "../components/FloorPlanViewer";
 import { ResultsTable } from "../components/ResultsTable";
 import { createExportPayload, downloadJson } from "../lib/export/exportJson";
+import { formatErrorDetails, getErrorMessage } from "../lib/errors/formatErrorDetails";
 import { parseRoomList } from "../lib/excel/parseRoomList";
 import {
   FLOOR_PLAN_FIXTURES,
@@ -53,6 +54,7 @@ export function App() {
   const [matches, setMatches] = useState<RoomMatch[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [spreadsheetError, setSpreadsheetError] = useState<string>();
+  const [errorDetails, setErrorDetails] = useState("");
   const [message, setMessage] = useState("Upload a floor plan and room list to begin.");
 
   useEffect(() => {
@@ -62,6 +64,26 @@ export function App() {
       }
     };
   }, [preview]);
+
+  useEffect(() => {
+    function handleWindowError(event: ErrorEvent) {
+      setErrorDetails(formatErrorDetails(event.error ?? event.message, "Window error"));
+      setMessage(getErrorMessage(event.error ?? event.message));
+    }
+
+    function handleUnhandledRejection(event: PromiseRejectionEvent) {
+      setErrorDetails(formatErrorDetails(event.reason, "Unhandled promise rejection"));
+      setMessage(getErrorMessage(event.reason));
+    }
+
+    window.addEventListener("error", handleWindowError);
+    window.addEventListener("unhandledrejection", handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener("error", handleWindowError);
+      window.removeEventListener("unhandledrejection", handleUnhandledRejection);
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedFloorPlanId) {
@@ -91,6 +113,7 @@ export function App() {
       .catch((error: unknown) => {
         if (!cancelled) {
           setFloorPlanFile(undefined);
+          setErrorDetails(formatErrorDetails(error, "Floor-plan fixture load error"));
           setMessage(getErrorMessage(error));
         }
       });
@@ -130,8 +153,10 @@ export function App() {
       .catch((error: unknown) => {
         if (!cancelled) {
           setExcelFile(undefined);
-          setSpreadsheetError(getErrorMessage(error));
-          setMessage(getErrorMessage(error));
+          const errorMessage = getErrorMessage(error);
+          setSpreadsheetError(errorMessage);
+          setErrorDetails(formatErrorDetails(error, "Room-list fixture load error"));
+          setMessage(errorMessage);
         }
       });
 
@@ -171,6 +196,7 @@ export function App() {
         setParsedRoomList(undefined);
         setSelectedColumn("");
         setSpreadsheetError(errorMessage);
+        setErrorDetails(formatErrorDetails(error, "Spreadsheet parse error"));
         setMessage(errorMessage);
       });
 
@@ -204,6 +230,7 @@ export function App() {
     }
 
     setIsProcessing(true);
+    setErrorDetails("");
     setMessage("Processing files locally in the browser...");
 
     try {
@@ -220,6 +247,7 @@ export function App() {
         `Processed ${parsedRoomList.rooms.length} rooms, ${extracted.length} text items, and ${grouped.length} label candidates.`
       );
     } catch (error: unknown) {
+      setErrorDetails(formatErrorDetails(error, "Processing error"));
       setMessage(getErrorMessage(error));
     } finally {
       setIsProcessing(false);
@@ -306,6 +334,7 @@ export function App() {
         candidates={candidates}
         matches={matches}
         rooms={parsedRoomList?.rooms ?? []}
+        errorDetails={errorDetails}
       />
     </main>
   );
@@ -365,8 +394,4 @@ function loadImagePreview(file: File): Promise<Preview> {
 
 function isPdf(file: File): boolean {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-}
-
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Something went wrong.";
 }

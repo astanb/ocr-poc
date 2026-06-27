@@ -375,8 +375,35 @@ th {
   margin-bottom: 8px;
 }
 
+.debug-panel h3 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
 .debug-message {
   margin-bottom: 12px;
+}
+
+.error-trace {
+  margin-bottom: 12px;
+  border: 1px solid #f0c6bd;
+  border-radius: 6px;
+  background: #fff7f5;
+  padding: 10px;
+}
+
+.error-trace textarea {
+  width: 100%;
+  min-height: 180px;
+  border: 1px solid #d99b8d;
+  border-radius: 6px;
+  background: #fff;
+  color: #17202a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  padding: 8px;
+  resize: vertical;
 }
 
 details {
