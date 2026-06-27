@@ -216,6 +216,84 @@ small {
   line-height: 1;
 }
 
+.pin-popover {
+  position: absolute;
+  z-index: 3;
+  width: min(280px, calc(100% - 20px));
+  max-width: 280px;
+  border: 1px solid #bfd0dc;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.22);
+  color: #17202a;
+  padding: 10px;
+  transform: translate(-50%, calc(-100% - 22px));
+}
+
+.pin-popover::after {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-right: 1px solid #bfd0dc;
+  border-bottom: 1px solid #bfd0dc;
+  background: #fff;
+  content: "";
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.pin-popover-header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.pin-popover-header strong {
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
+.pin-popover-close {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border-color: #b9c4d0;
+  background: #f8fafc;
+  color: #17202a;
+  padding: 0;
+}
+
+.pin-popover dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 10px 0;
+}
+
+.pin-popover dt {
+  color: #5d6978;
+  font-size: 0.72rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.pin-popover dd {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.pin-popover p {
+  color: #5d6978;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .pin-matched {
   background: #1f8f72;
 }

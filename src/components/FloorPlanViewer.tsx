@@ -24,7 +24,8 @@ type Props = {
 export function FloorPlanViewer({ preview, matches, onPinMove }: Props) {
   const canvasHostRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const [activeRoomId, setActiveRoomId] = useState<string>();
+  const [draggingRoomId, setDraggingRoomId] = useState<string>();
+  const [selectedRoomId, setSelectedRoomId] = useState<string>();
 
   useEffect(() => {
     if (!canvasHostRef.current || preview?.kind !== "canvas") {
@@ -40,6 +41,7 @@ export function FloorPlanViewer({ preview, matches, onPinMove }: Props) {
     (match) => typeof match.x === "number" && typeof match.y === "number"
       && (match.page ?? 1) === 1
   );
+  const selectedMatch = visibleMatches.find((match) => match.roomId === selectedRoomId);
 
   function updatePin(roomId: string, clientX: number, clientY: number) {
     if (!stageRef.current || !preview) {
@@ -64,12 +66,12 @@ export function FloorPlanViewer({ preview, matches, onPinMove }: Props) {
         className="floor-plan-stage"
         style={{ aspectRatio: preview ? `${preview.width} / ${preview.height}` : "16 / 10" }}
         onPointerMove={(event) => {
-          if (activeRoomId) {
-            updatePin(activeRoomId, event.clientX, event.clientY);
+          if (draggingRoomId) {
+            updatePin(draggingRoomId, event.clientX, event.clientY);
           }
         }}
-        onPointerUp={() => setActiveRoomId(undefined)}
-        onPointerCancel={() => setActiveRoomId(undefined)}
+        onPointerUp={() => setDraggingRoomId(undefined)}
+        onPointerCancel={() => setDraggingRoomId(undefined)}
       >
         {!preview && <div className="empty-state">No floor plan rendered yet</div>}
         {preview?.kind === "image" && (
@@ -92,15 +94,106 @@ export function FloorPlanViewer({ preview, matches, onPinMove }: Props) {
               )}%`}
               onPointerDown={(event) => {
                 event.currentTarget.setPointerCapture(event.pointerId);
-                setActiveRoomId(match.roomId);
+                setDraggingRoomId(match.roomId);
+              }}
+              onClick={() => {
+                setSelectedRoomId(match.roomId);
               }}
             >
               <span>{Math.round(match.confidence * 100)}</span>
             </button>
           ))}
+
+        {preview && selectedMatch && (
+          <PinPopover
+            match={selectedMatch}
+            previewWidth={preview.width}
+            previewHeight={preview.height}
+            onClose={() => setSelectedRoomId(undefined)}
+          />
+        )}
       </div>
     </section>
   );
+}
+
+function PinPopover({
+  match,
+  previewWidth,
+  previewHeight,
+  onClose
+}: {
+  match: RoomMatch;
+  previewWidth: number;
+  previewHeight: number;
+  onClose: () => void;
+}) {
+  const details = getPinPopoverDetails(match);
+  const position = getPinPopoverPosition(match, previewWidth, previewHeight);
+
+  return (
+    <aside
+      className={`pin-popover pin-popover-${position.placement}`}
+      style={{
+        left: `${position.left}%`,
+        top: `${position.top}%`
+      }}
+      aria-label={`Details for ${details.room}`}
+    >
+      <div className="pin-popover-header">
+        <strong>{details.room}</strong>
+        <button type="button" className="pin-popover-close" onClick={onClose} aria-label="Close">
+          x
+        </button>
+      </div>
+      <dl>
+        <div>
+          <dt>Matched text</dt>
+          <dd>{details.matchedText}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>{details.status}</dd>
+        </div>
+        <div>
+          <dt>Confidence</dt>
+          <dd>{details.confidence}</dd>
+        </div>
+        <div>
+          <dt>Page</dt>
+          <dd>{details.page}</dd>
+        </div>
+      </dl>
+      <p>{details.reason}</p>
+    </aside>
+  );
+}
+
+export function getPinPopoverDetails(match: RoomMatch) {
+  return {
+    room: match.roomRawName,
+    matchedText: match.matchedText ?? "No matched text",
+    page: String(match.page ?? 1),
+    confidence: `${Math.round(match.confidence * 100)}%`,
+    status: match.status,
+    reason: match.reason
+  };
+}
+
+export function getPinPopoverPosition(
+  match: Pick<RoomMatch, "x" | "y">,
+  previewWidth: number,
+  previewHeight: number
+) {
+  const left = clamp(((match.x ?? 0) / previewWidth) * 100, 10, 90);
+  const top = ((match.y ?? 0) / previewHeight) * 100;
+  const placement = top < 28 ? "below" : "above";
+
+  return {
+    left,
+    top: clamp(top, 8, 92),
+    placement
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {

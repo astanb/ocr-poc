@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "./lib/polyfills/browserPolyfills";
 import { App } from "./app/App";
 import "./styles.css";
 
