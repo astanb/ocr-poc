@@ -54,7 +54,7 @@ export function App() {
   const [selectedFloorPlanId, setSelectedFloorPlanId] = useState(FLOOR_PLAN_FIXTURES[0]?.id ?? "");
   const [selectedRoomListId, setSelectedRoomListId] = useState(ROOM_LIST_FIXTURES[0]?.id ?? "");
   const [selectedOcrStrategyId, setSelectedOcrStrategyId] =
-    useState<OcrStrategyId>("compare-tesseract-paddle");
+    useState<OcrStrategyId>("compare-all");
   const [floorPlanFile, setFloorPlanFile] = useState<File>();
   const [excelFile, setExcelFile] = useState<File>();
   const [selectedColumn, setSelectedColumn] = useState("");

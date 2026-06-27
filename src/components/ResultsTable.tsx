@@ -130,6 +130,10 @@ function formatEngineName(engineId: string): string {
     return "Paddle";
   }
 
+  if (engineId === "tesseract-wasm") {
+    return "tesseract-wasm";
+  }
+
   return engineId;
 }
 

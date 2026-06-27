@@ -1,15 +1,23 @@
 import type { Point2D } from "@paddleocr/paddleocr-js";
+import { OCRClient, supportsFastBuild } from "tesseract-wasm";
 import type { ExtractedTextItem } from "../../types/floorPlan";
 import { extractImageText } from "./extractImageText";
 import type { OcrEngine } from "./ocrPipeline";
 
 type OcrImage = File | Blob | HTMLCanvasElement | string;
 
-export type OcrEngineId = "tesseract" | "paddle";
+export type OcrEngineId = "tesseract" | "paddle" | "tesseract-wasm";
 export type OcrStrategyId =
   | "tesseract"
   | "paddle"
-  | "compare-tesseract-paddle";
+  | "tesseract-wasm"
+  | "compare-all";
+
+const TESSERACT_WASM_VERSION = "0.11.0";
+const TESSERACT_WASM_BASE_URL =
+  `https://cdn.jsdelivr.net/npm/tesseract-wasm@${TESSERACT_WASM_VERSION}/dist`;
+const TESSERACT_WASM_MODEL_URL =
+  "https://cdn.jsdelivr.net/gh/tesseract-ocr/tessdata_fast@main/eng.traineddata";
 
 export const OCR_STRATEGIES: Array<{
   id: OcrStrategyId;
@@ -17,9 +25,9 @@ export const OCR_STRATEGIES: Array<{
   description: string;
 }> = [
   {
-    id: "compare-tesseract-paddle",
-    label: "Compare Tesseract + Paddle",
-    description: "Run both OCR engines and keep the best room matches."
+    id: "compare-all",
+    label: "Compare all OCR engines",
+    description: "Run Tesseract.js, PaddleOCR.js, and tesseract-wasm, keeping the best room matches."
   },
   {
     id: "tesseract",
@@ -30,6 +38,11 @@ export const OCR_STRATEGIES: Array<{
     id: "paddle",
     label: "Paddle only",
     description: "Use PaddleOCR.js with PP-OCRv5 browser models."
+  },
+  {
+    id: "tesseract-wasm",
+    label: "tesseract-wasm only",
+    description: "Use the smaller WebAssembly Tesseract build."
   }
 ];
 
@@ -42,7 +55,11 @@ export function getOcrEngines(strategyId: OcrStrategyId): OcrEngine<OcrImage>[] 
     return [tesseractEngine];
   }
 
-  return [tesseractEngine, paddleEngine];
+  if (strategyId === "tesseract-wasm") {
+    return [tesseractWasmEngine];
+  }
+
+  return [tesseractEngine, paddleEngine, tesseractWasmEngine];
 }
 
 const tesseractEngine: OcrEngine<OcrImage> = {
@@ -57,6 +74,12 @@ const paddleEngine: OcrEngine<OcrImage> = {
   extractText: extractPaddleText
 };
 
+const tesseractWasmEngine: OcrEngine<OcrImage> = {
+  id: "tesseract-wasm",
+  label: "tesseract-wasm",
+  extractText: extractTesseractWasmText
+};
+
 let paddleOcrPromise: Promise<{
   predict: (image: Exclude<OcrImage, string>) => Promise<Array<{
     image: { width: number; height: number };
@@ -67,6 +90,8 @@ let paddleOcrPromise: Promise<{
     }>;
   }>>;
 }> | undefined;
+
+let tesseractWasmClientPromise: Promise<OCRClient> | undefined;
 
 async function extractPaddleText(image: OcrImage): Promise<ExtractedTextItem[]> {
   if (typeof image === "string") {
@@ -133,4 +158,94 @@ function getPolygonBounds(poly: Point2D[]): {
 
 function getPointCoordinate(point: Point2D, axis: "x" | "y"): number {
   return Number(point[axis === "x" ? 0 : 1]) || 0;
+}
+
+async function extractTesseractWasmText(image: OcrImage): Promise<ExtractedTextItem[]> {
+  const client = await getTesseractWasmClient();
+  const imageBitmapOrData = await loadTesseractWasmImage(image);
+
+  await client.clearImage();
+  await client.loadImage(imageBitmapOrData);
+
+  const boxes = await client.getTextBoxes("word");
+  closeImageBitmap(imageBitmapOrData);
+
+  return boxes.flatMap((box): ExtractedTextItem[] => {
+    const text = box.text.trim();
+    if (!text || box.confidence < 0.2) {
+      return [];
+    }
+
+    return [{
+      text,
+      page: 1,
+      x: box.rect.left,
+      y: box.rect.top,
+      width: box.rect.right - box.rect.left,
+      height: box.rect.bottom - box.rect.top,
+      source: "ocr:tesseract-wasm"
+    }];
+  });
+}
+
+async function getTesseractWasmClient(): Promise<OCRClient> {
+  tesseractWasmClientPromise ??= createTesseractWasmClient();
+  return tesseractWasmClientPromise;
+}
+
+async function createTesseractWasmClient(): Promise<OCRClient> {
+  const wasmName = supportsFastBuild()
+    ? "tesseract-core.wasm"
+    : "tesseract-core-fallback.wasm";
+  const wasmBinary = await fetchArrayBuffer(`${TESSERACT_WASM_BASE_URL}/${wasmName}`);
+  const client = new OCRClient({
+    workerURL: `${TESSERACT_WASM_BASE_URL}/tesseract-worker.js`,
+    wasmBinary
+  });
+
+  await client.loadModel(TESSERACT_WASM_MODEL_URL);
+  return client;
+}
+
+async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Could not load ${url}: HTTP ${response.status}`);
+  }
+
+  return response.arrayBuffer();
+}
+
+async function loadTesseractWasmImage(
+  image: OcrImage
+): Promise<ImageBitmap | ImageData> {
+  if (typeof image === "string") {
+    return createImageBitmap(await fetchImageBlob(image));
+  }
+
+  if (image instanceof HTMLCanvasElement) {
+    const context = image.getContext("2d");
+    if (!context) {
+      throw new Error("Could not read canvas image data for tesseract-wasm.");
+    }
+
+    return context.getImageData(0, 0, image.width, image.height);
+  }
+
+  return createImageBitmap(image);
+}
+
+async function fetchImageBlob(url: string): Promise<Blob> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Could not load image ${url}: HTTP ${response.status}`);
+  }
+
+  return response.blob();
+}
+
+function closeImageBitmap(image: ImageBitmap | ImageData): void {
+  if ("close" in image) {
+    image.close();
+  }
 }
