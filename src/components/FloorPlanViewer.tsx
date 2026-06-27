@@ -58,6 +58,16 @@ export function FloorPlanViewer({
   });
   const [panDrag, setPanDrag] = useState<PanDrag>();
   const [isAnimatingToSelection, setIsAnimatingToSelection] = useState(false);
+  const previewRef = useRef(preview);
+  const viewTransformRef = useRef(viewTransform);
+
+  useEffect(() => {
+    previewRef.current = preview;
+  }, [preview]);
+
+  useEffect(() => {
+    viewTransformRef.current = viewTransform;
+  }, [viewTransform]);
 
   useEffect(() => {
     if (!canvasHostRef.current || preview?.kind !== "canvas") {
@@ -68,6 +78,37 @@ export function FloorPlanViewer({
     host.replaceChildren(preview.canvas);
     preview.canvas.className = "floor-plan-media";
   }, [preview]);
+
+  useEffect(() => {
+    const currentStage = stageRef.current;
+    if (!currentStage) {
+      return;
+    }
+    const stageElement = currentStage;
+
+    function handleWheel(event: WheelEvent) {
+      if (!previewRef.current) {
+        return;
+      }
+
+      event.preventDefault();
+      const bounds = stageElement.getBoundingClientRect();
+      setIsAnimatingToSelection(false);
+      setViewTransform(
+        getWheelZoomTransform({
+          current: viewTransformRef.current,
+          deltaY: event.deltaY,
+          originX: event.clientX - bounds.left,
+          originY: event.clientY - bounds.top,
+          viewportWidth: bounds.width,
+          viewportHeight: bounds.height
+        })
+      );
+    }
+
+    stageElement.addEventListener("wheel", handleWheel, { passive: false });
+    return () => stageElement.removeEventListener("wheel", handleWheel);
+  }, []);
 
   const visibleMatches = matches.filter(
     (match) => typeof match.x === "number" && typeof match.y === "number"
@@ -119,32 +160,6 @@ export function FloorPlanViewer({
         ref={stageRef}
         className="floor-plan-stage"
         style={{ aspectRatio: preview ? `${preview.width} / ${preview.height}` : "16 / 10" }}
-        onWheel={(event) => {
-          if (!preview) {
-            return;
-          }
-
-          event.preventDefault();
-          const bounds = event.currentTarget.getBoundingClientRect();
-          const nextScale = clamp(
-            viewTransform.scale * (event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP),
-            MIN_ZOOM,
-            MAX_ZOOM
-          );
-          setIsAnimatingToSelection(false);
-          setViewTransform((current) =>
-            constrainViewTransform({
-              transform: zoomViewTransform({
-                current,
-                nextScale,
-                originX: event.clientX - bounds.left,
-                originY: event.clientY - bounds.top
-              }),
-              viewportWidth: bounds.width,
-              viewportHeight: bounds.height
-            })
-          );
-        }}
         onPointerDown={(event) => {
           if (!preview || event.button !== 0 || isInteractivePlanTarget(event.target)) {
             return;
@@ -367,6 +382,39 @@ export function zoomViewTransform({
     panX: originX - contentX * nextScale,
     panY: originY - contentY * nextScale
   };
+}
+
+export function getWheelZoomTransform({
+  current,
+  deltaY,
+  originX,
+  originY,
+  viewportWidth,
+  viewportHeight
+}: {
+  current: ViewTransform;
+  deltaY: number;
+  originX: number;
+  originY: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}): ViewTransform {
+  const nextScale = clamp(
+    current.scale * (deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP),
+    MIN_ZOOM,
+    MAX_ZOOM
+  );
+
+  return constrainViewTransform({
+    transform: zoomViewTransform({
+      current,
+      nextScale,
+      originX,
+      originY
+    }),
+    viewportWidth,
+    viewportHeight
+  });
 }
 
 export function constrainViewTransform({

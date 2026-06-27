@@ -5,6 +5,7 @@ import {
   getPinPopoverDetails,
   getPinPopoverPosition,
   getSelectionFocusScale,
+  getWheelZoomTransform,
   zoomViewTransform
 } from "./FloorPlanViewer";
 import type { RoomMatch } from "../types/matching";
@@ -77,6 +78,23 @@ describe("floor plan view transforms", () => {
       scale: 3,
       panX: -300,
       panY: -175
+    });
+  });
+
+  it("constrains wheel zoom around the pointer", () => {
+    expect(
+      getWheelZoomTransform({
+        current: { scale: 1, panX: 0, panY: 0 },
+        deltaY: -1,
+        originX: 500,
+        originY: 250,
+        viewportWidth: 1000,
+        viewportHeight: 500
+      })
+    ).toEqual({
+      scale: 1.18,
+      panX: -90,
+      panY: -45
     });
   });
 
