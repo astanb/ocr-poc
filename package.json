@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@paddleocr/paddleocr-js": "^0.4.2",
     "@vitejs/plugin-react": "latest",
     "fast-fuzzy": "^1.12.0",
     "pdfjs-dist": "latest",

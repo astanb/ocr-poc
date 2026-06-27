@@ -20,7 +20,7 @@ describe("summarizeMatchSources", () => {
     expect(
       summarizeMatchSources([
         match("pdf", "pdf-text"),
-        match("ocr", "ocr"),
+        match("ocr", "ocr:tesseract"),
         match("mixed", "mixed"),
         match("unmatched", undefined, "unmatched")
       ])

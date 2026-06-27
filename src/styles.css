@@ -334,6 +334,22 @@ small {
   padding: 0 10px;
 }
 
+.ocr-attempt-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ocr-attempt-summary span {
+  border: 1px solid #dbe4ec;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.84rem;
+  padding: 6px 10px;
+}
+
 table {
   width: 100%;
   min-width: 960px;

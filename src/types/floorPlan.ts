@@ -1,4 +1,4 @@
-export type TextSource = "pdf-text" | "ocr";
+export type TextSource = "pdf-text" | `ocr:${string}`;
 
 export type ExtractedTextItem = {
   text: string;

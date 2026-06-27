@@ -13,7 +13,12 @@ import {
   getFixtureById,
   loadFixtureFile
 } from "../lib/fixtures/fpTestFixtures";
-import { extractImageText } from "../lib/ocr/extractImageText";
+import {
+  OCR_STRATEGIES,
+  getOcrEngines,
+  type OcrStrategyId
+} from "../lib/ocr/ocrEngines";
+import { runOcrMatchPipeline, type OcrAttempt } from "../lib/ocr/ocrPipeline";
 import { extractPdfText } from "../lib/pdf/extractPdfText";
 import { renderPdfPage } from "../lib/pdf/renderPdfPage";
 import { groupTextItems } from "../lib/matching/groupTextItems";
@@ -48,6 +53,8 @@ const LOW_COLUMN_CONFIDENCE = 0.75;
 export function App() {
   const [selectedFloorPlanId, setSelectedFloorPlanId] = useState(FLOOR_PLAN_FIXTURES[0]?.id ?? "");
   const [selectedRoomListId, setSelectedRoomListId] = useState(ROOM_LIST_FIXTURES[0]?.id ?? "");
+  const [selectedOcrStrategyId, setSelectedOcrStrategyId] =
+    useState<OcrStrategyId>("compare-tesseract-paddle");
   const [floorPlanFile, setFloorPlanFile] = useState<File>();
   const [excelFile, setExcelFile] = useState<File>();
   const [selectedColumn, setSelectedColumn] = useState("");
@@ -56,6 +63,7 @@ export function App() {
   const [textItems, setTextItems] = useState<ExtractedTextItem[]>([]);
   const [candidates, setCandidates] = useState<ExtractedLabelCandidate[]>([]);
   const [matches, setMatches] = useState<RoomMatch[]>([]);
+  const [ocrAttempts, setOcrAttempts] = useState<OcrAttempt[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [spreadsheetError, setSpreadsheetError] = useState<string>();
   const [errorDetails, setErrorDetails] = useState("");
@@ -242,13 +250,15 @@ export function App() {
       const processed = await processFloorPlanText(
         floorPlanFile,
         floorPreview,
-        parsedRoomList.rooms
+        parsedRoomList.rooms,
+        selectedOcrStrategyId
       );
 
       setPreview(floorPreview);
       setTextItems(processed.textItems);
       setCandidates(processed.candidates);
       setMatches(processed.matches);
+      setOcrAttempts(processed.ocrAttempts);
       setMessage(
         `Processed ${parsedRoomList.rooms.length} rooms, ${processed.textItems.length} text items, and ${processed.candidates.length} label candidates.`
       );
@@ -282,6 +292,7 @@ export function App() {
     setTextItems([]);
     setCandidates([]);
     setMatches([]);
+    setOcrAttempts([]);
   }
 
   const exportPayload = useMemo(
@@ -321,6 +332,9 @@ export function App() {
           isProcessing={isProcessing}
           onFloorPlanFixtureChange={handleFloorPlanFixtureChange}
           onRoomListFixtureChange={handleRoomListFixtureChange}
+          ocrStrategies={OCR_STRATEGIES}
+          selectedOcrStrategyId={selectedOcrStrategyId}
+          onOcrStrategyChange={setSelectedOcrStrategyId}
           onColumnChange={handleColumnChange}
           onProcess={processFiles}
         />
@@ -331,7 +345,11 @@ export function App() {
           onPinMove={correctMatch}
         />
 
-        <ResultsTable matches={matches} onExport={exportResults} />
+        <ResultsTable
+          matches={matches}
+          ocrAttempts={ocrAttempts}
+          onExport={exportResults}
+        />
       </section>
 
       <DebugPanel
@@ -363,11 +381,13 @@ async function buildPreview(file: File): Promise<Preview> {
 async function processFloorPlanText(
   file: File,
   preview: Preview,
-  rooms: ParsedRoomList["rooms"]
+  rooms: ParsedRoomList["rooms"],
+  ocrStrategyId: OcrStrategyId
 ): Promise<{
   textItems: ExtractedTextItem[];
   candidates: ExtractedLabelCandidate[];
   matches: RoomMatch[];
+  ocrAttempts: OcrAttempt[];
 }> {
   if (isPdf(file)) {
     const pdfText = await extractPdfText(file);
@@ -379,27 +399,36 @@ async function processFloorPlanText(
       return {
         textItems: pdfText,
         candidates: pdfCandidates,
-        matches: pdfMatches
+        matches: pdfMatches,
+        ocrAttempts: []
       };
     }
 
-    const ocrText = await extractImageText(preview.canvas);
-    const ocrCandidates = groupTextItems(ocrText);
-    const ocrRetryMatches = matchRooms(roomsNeedingOcr, ocrCandidates);
+    const ocrPipeline = await runOcrMatchPipeline({
+      image: preview.canvas,
+      rooms: roomsNeedingOcr,
+      engines: getOcrEngines(ocrStrategyId)
+    });
 
     return {
-      textItems: [...pdfText, ...ocrText],
-      candidates: [...pdfCandidates, ...ocrCandidates],
-      matches: mergePdfMatchesWithOcrRetries(pdfMatches, ocrRetryMatches)
+      textItems: [...pdfText, ...ocrPipeline.textItems],
+      candidates: [...pdfCandidates, ...ocrPipeline.candidates],
+      matches: mergePdfMatchesWithOcrRetries(pdfMatches, ocrPipeline.matches),
+      ocrAttempts: ocrPipeline.attempts
     };
   }
 
-  const ocrText = await extractImageText(file);
-  const ocrCandidates = groupTextItems(ocrText);
+  const ocrPipeline = await runOcrMatchPipeline({
+    image: file,
+    rooms,
+    engines: getOcrEngines(ocrStrategyId)
+  });
+
   return {
-    textItems: ocrText,
-    candidates: ocrCandidates,
-    matches: matchRooms(rooms, ocrCandidates)
+    textItems: ocrPipeline.textItems,
+    candidates: ocrPipeline.candidates,
+    matches: ocrPipeline.matches,
+    ocrAttempts: ocrPipeline.attempts
   };
 }
 

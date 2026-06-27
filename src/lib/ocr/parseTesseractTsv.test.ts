@@ -23,7 +23,7 @@ describe("parseTesseractTsv", () => {
         y: 115,
         width: 28,
         height: 14,
-        source: "ocr"
+        source: "ocr:tesseract"
       },
       {
         text: "room",
@@ -32,7 +32,7 @@ describe("parseTesseractTsv", () => {
         y: 118,
         width: 33,
         height: 8,
-        source: "ocr"
+        source: "ocr:tesseract"
       },
       {
         text: "GF040",
@@ -41,7 +41,7 @@ describe("parseTesseractTsv", () => {
         y: 135,
         width: 39,
         height: 12,
-        source: "ocr"
+        source: "ocr:tesseract"
       }
     ]);
   });

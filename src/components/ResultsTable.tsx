@@ -1,11 +1,13 @@
+import type { OcrAttempt } from "../lib/ocr/ocrPipeline";
 import type { RoomMatch } from "../types/matching";
 
 type Props = {
   matches: RoomMatch[];
+  ocrAttempts?: OcrAttempt[];
   onExport: () => void;
 };
 
-export function ResultsTable({ matches, onExport }: Props) {
+export function ResultsTable({ matches, ocrAttempts = [], onExport }: Props) {
   const summary = summarizeMatchSources(matches);
 
   return (
@@ -24,6 +26,19 @@ export function ResultsTable({ matches, onExport }: Props) {
         <span>{summary.mixed} mixed</span>
         <span>{summary.unmatched} unmatched</span>
       </div>
+
+      {ocrAttempts.length > 0 && (
+        <div className="ocr-attempt-summary" aria-label="OCR engine summary">
+          {ocrAttempts.map((attempt) => (
+            <span key={attempt.engineId}>
+              {attempt.engineLabel}: {attempt.stats.matched} matched
+              {attempt.errorMessage
+                ? ` (${attempt.errorMessage})`
+                : ` in ${Math.round(attempt.durationMs)}ms`}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="table-wrap">
         <table>
@@ -78,7 +93,7 @@ export function summarizeMatchSources(matches: RoomMatch[]) {
         summary.unmatched += 1;
       } else if (match.matchedSource === "pdf-text") {
         summary.pdfText += 1;
-      } else if (match.matchedSource === "ocr") {
+      } else if (match.matchedSource.startsWith("ocr:")) {
         summary.ocr += 1;
       } else {
         summary.mixed += 1;
@@ -91,15 +106,31 @@ export function summarizeMatchSources(matches: RoomMatch[]) {
 }
 
 function formatSource(source?: string): string {
+  if (!source) {
+    return "";
+  }
+
   if (source === "pdf-text") {
     return "PDF text";
   }
 
-  if (source === "ocr") {
-    return "OCR";
+  if (source.startsWith("ocr:")) {
+    return `${formatEngineName(source.slice("ocr:".length))} OCR`;
   }
 
-  return source ?? "";
+  return source;
+}
+
+function formatEngineName(engineId: string): string {
+  if (engineId === "tesseract") {
+    return "Tesseract";
+  }
+
+  if (engineId === "paddle") {
+    return "Paddle";
+  }
+
+  return engineId;
 }
 
 function formatNumber(value?: number): string {

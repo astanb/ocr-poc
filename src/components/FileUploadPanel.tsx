@@ -1,11 +1,18 @@
 import type { ParsedRoomList } from "../types/rooms";
 import type { FixtureFile } from "../lib/fixtures/fpTestFixtures";
+import type { OcrStrategyId } from "../lib/ocr/ocrEngines";
 
 type Props = {
   floorPlanFixtures: FixtureFile[];
   roomListFixtures: FixtureFile[];
   selectedFloorPlanId: string;
   selectedRoomListId: string;
+  selectedOcrStrategyId: OcrStrategyId;
+  ocrStrategies: Array<{
+    id: OcrStrategyId;
+    label: string;
+    description: string;
+  }>;
   floorPlanFile?: File;
   excelFile?: File;
   parsedRoomList?: ParsedRoomList;
@@ -15,6 +22,7 @@ type Props = {
   isProcessing: boolean;
   onFloorPlanFixtureChange: (fixtureId: string) => void;
   onRoomListFixtureChange: (fixtureId: string) => void;
+  onOcrStrategyChange: (strategyId: OcrStrategyId) => void;
   onColumnChange: (column: string) => void;
   onProcess: () => void;
 };
@@ -24,6 +32,8 @@ export function FileUploadPanel({
   roomListFixtures,
   selectedFloorPlanId,
   selectedRoomListId,
+  selectedOcrStrategyId,
+  ocrStrategies,
   floorPlanFile,
   excelFile,
   parsedRoomList,
@@ -33,6 +43,7 @@ export function FileUploadPanel({
   isProcessing,
   onFloorPlanFixtureChange,
   onRoomListFixtureChange,
+  onOcrStrategyChange,
   onColumnChange,
   onProcess
 }: Props) {
@@ -77,6 +88,23 @@ export function FileUploadPanel({
           <small>{excelFile ? excelFile.name : "Loading spreadsheet..."}</small>
         </label>
       </div>
+
+      <label className="field compact-field">
+        <span>OCR strategy</span>
+        <select
+          value={selectedOcrStrategyId}
+          onChange={(event) => onOcrStrategyChange(event.target.value as OcrStrategyId)}
+        >
+          {ocrStrategies.map((strategy) => (
+            <option key={strategy.id} value={strategy.id}>
+              {strategy.label}
+            </option>
+          ))}
+        </select>
+        <small>
+          {ocrStrategies.find((strategy) => strategy.id === selectedOcrStrategyId)?.description}
+        </small>
+      </label>
 
       {parsedRoomList && (
         <label className="field compact-field">

@@ -54,7 +54,7 @@ export function parseTesseractTsv(
         y: Number(columns[topIndex]),
         width: Number(columns[widthIndex]),
         height: Number(columns[heightIndex]),
-        source: "ocr"
+      source: "ocr:tesseract"
       }
     ];
   });
