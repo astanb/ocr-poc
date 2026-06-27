@@ -94,6 +94,12 @@ let paddleOcrPromise: Promise<{
 let tesseractWasmClientPromise: Promise<OCRClient> | undefined;
 
 async function extractPaddleText(image: OcrImage): Promise<ExtractedTextItem[]> {
+  if (shouldSkipPaddleOcr(getBrowserRuntimeInfo())) {
+    throw new Error(
+      "PaddleOCR skipped on this browser because its WASM/ONNX runtime is likely to reload the tab. Use Tesseract.js or tesseract-wasm on iOS/mobile."
+    );
+  }
+
   if (typeof image === "string") {
     throw new Error("PaddleOCR browser mode needs a File, Blob, or canvas image.");
   }
@@ -248,4 +254,47 @@ function closeImageBitmap(image: ImageBitmap | ImageData): void {
   if ("close" in image) {
     image.close();
   }
+}
+
+export type BrowserRuntimeInfo = {
+  userAgent: string;
+  platform: string;
+  maxTouchPoints: number;
+  deviceMemory?: number;
+};
+
+export function shouldSkipPaddleOcr({
+  userAgent,
+  platform,
+  maxTouchPoints,
+  deviceMemory
+}: BrowserRuntimeInfo): boolean {
+  const isIos = /iPad|iPhone|iPod/u.test(userAgent) ||
+    (platform === "MacIntel" && maxTouchPoints > 1);
+  const isMobileWebKit = /Mobile\/.+Safari/u.test(userAgent) &&
+    /AppleWebKit/u.test(userAgent);
+
+  return isIos || isMobileWebKit || (deviceMemory !== undefined && deviceMemory <= 2);
+}
+
+function getBrowserRuntimeInfo(): BrowserRuntimeInfo {
+  if (typeof navigator === "undefined") {
+    return {
+      userAgent: "",
+      platform: "",
+      maxTouchPoints: 0
+    };
+  }
+
+  return {
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    maxTouchPoints: navigator.maxTouchPoints,
+    deviceMemory: getDeviceMemory()
+  };
+}
+
+function getDeviceMemory(): number | undefined {
+  const maybeNavigator = navigator as Navigator & { deviceMemory?: number };
+  return maybeNavigator.deviceMemory;
 }
