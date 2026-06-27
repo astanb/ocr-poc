@@ -5,6 +5,7 @@ type Preview =
   | {
       kind: "canvas";
       canvas: HTMLCanvasElement;
+      displayUrl?: string;
       width: number;
       height: number;
     }
@@ -311,7 +312,10 @@ export function FloorPlanViewer({
             {preview.kind === "image" && (
               <img className="floor-plan-media" src={preview.url} alt="Uploaded floor plan" />
             )}
-            {preview.kind === "canvas" && <div ref={canvasHostRef} />}
+            {preview.kind === "canvas" && preview.displayUrl && (
+              <img className="floor-plan-media" src={preview.displayUrl} alt="Rendered PDF floor plan" />
+            )}
+            {preview.kind === "canvas" && !preview.displayUrl && <div ref={canvasHostRef} />}
 
             {visibleMatches
               .filter((match) => match.roomId !== activeSelectedRoomId)

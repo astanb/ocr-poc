@@ -83,6 +83,25 @@ describe("formatOcrAttemptSummary", () => {
       "PaddleOCR.js / Raw high-resolution render / tiled x4: 3 unique rooms, 7 matched, OCR 1234ms"
     );
   });
+
+  it("labels PDF text attempts separately from OCR attempts", () => {
+    expect(
+      formatOcrAttemptSummary({
+        engineId: "pdf-text",
+        engineLabel: "PDF.js",
+        passLabel: "Text extraction",
+        durationMs: 42,
+        textItems: [],
+        candidates: [],
+        matches: [match("room-1", "pdf-text")],
+        stats: {
+          matched: 1,
+          ambiguous: 0,
+          unmatched: 0
+        }
+      })
+    ).toBe("PDF.js / Text extraction: 1 unique rooms, 1 matched, PDF 42ms");
+  });
 });
 
 describe("getUniqueRoomsFoundCount", () => {

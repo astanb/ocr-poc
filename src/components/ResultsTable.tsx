@@ -37,7 +37,7 @@ export function ResultsTable({
       </div>
 
       {ocrAttempts.length > 0 && (
-        <div className="ocr-attempt-summary" aria-label="OCR engine summary">
+        <div className="ocr-attempt-summary" aria-label="Processing attempt summary">
           {sortedOcrAttempts.map((attempt) => (
             <span key={getOcrAttemptKey(attempt)}>
               {formatOcrAttemptSummary(attempt)}
@@ -149,10 +149,14 @@ export function formatOcrAttemptSummary(attempt: OcrAttempt): string {
       : undefined,
     attempt.errorMessage
       ? attempt.errorMessage
-      : `OCR ${Math.round(attempt.durationMs)}ms`
+      : `${getAttemptDurationLabel(attempt)} ${Math.round(attempt.durationMs)}ms`
   ].filter(Boolean);
 
   return `${labelParts.join(" / ")}: ${getUniqueRoomsFoundCount(attempt)} unique rooms, ${attempt.stats.matched} matched, ${timingParts.join(", ")}`;
+}
+
+function getAttemptDurationLabel(attempt: OcrAttempt): string {
+  return attempt.engineId === "pdf-text" ? "PDF" : "OCR";
 }
 
 export function getUniqueRoomsFoundCount(attempt: OcrAttempt): number {

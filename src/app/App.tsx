@@ -48,6 +48,7 @@ type Preview =
   | {
       kind: "canvas";
       canvas: HTMLCanvasElement;
+      displayUrl?: string;
       width: number;
       height: number;
       scale?: number;
@@ -102,6 +103,8 @@ export function App() {
     return () => {
       if (preview?.kind === "image") {
         URL.revokeObjectURL(preview.url);
+      } else if (preview?.kind === "canvas" && preview.displayUrl) {
+        URL.revokeObjectURL(preview.displayUrl);
       }
     };
   }, [preview]);
@@ -279,7 +282,10 @@ export function App() {
 
     try {
       const startedAt = now();
-      const floorPreview = await buildPreview(floorPlanFile);
+      const floorPreview = await buildPreview(floorPlanFile, (progress) => {
+        setProcessingSteps((current) => [...current.slice(-80), progress]);
+        setMessage(progress.message);
+      });
       const processed = await processFloorPlanText(
         floorPlanFile,
         floorPreview,
@@ -430,12 +436,31 @@ export function App() {
   );
 }
 
-async function buildPreview(file: File): Promise<Preview> {
+async function buildPreview(
+  file: File,
+  onProgress?: (progress: OcrPipelineProgress) => void
+): Promise<Preview> {
   if (isPdf(file)) {
+    const startedAt = now();
+    emitProcessingProgress(onProgress, {
+      engineId: "pdf-render",
+      engineLabel: "PDF.js",
+      passLabel: "Render preview",
+      status: "started"
+    });
     const rendered = await renderPdfPage(file);
+    const displayUrl = await createCanvasDisplayUrl(rendered.canvas);
+    emitProcessingProgress(onProgress, {
+      engineId: "pdf-render",
+      engineLabel: "PDF.js",
+      passLabel: "Render preview",
+      status: "completed",
+      durationMs: now() - startedAt
+    });
     return {
       kind: "canvas",
       canvas: rendered.canvas,
+      displayUrl,
       width: rendered.width,
       height: rendered.height,
       scale: rendered.scale
@@ -459,13 +484,47 @@ async function processFloorPlanText(
   ocrAttempts: OcrAttempt[];
 }> {
   if (isPdf(file)) {
+    const pdfStartedAt = now();
+    emitProcessingProgress(onProgress, {
+      engineId: "pdf-text",
+      engineLabel: "PDF.js",
+      passLabel: "Text extraction",
+      status: "started"
+    });
     const pdfText = await extractPdfText(
       file,
       undefined,
       preview.kind === "canvas" ? preview.scale : undefined
     );
+    emitProcessingProgress(onProgress, {
+      engineId: "pdf-text",
+      engineLabel: "PDF.js",
+      passLabel: "Text extraction",
+      status: "completed",
+      durationMs: now() - pdfStartedAt
+    });
+    const matchStartedAt = now();
+    emitProcessingProgress(onProgress, {
+      engineId: "pdf-text",
+      engineLabel: "PDF.js",
+      passLabel: "Match PDF text",
+      status: "started"
+    });
     const pdfCandidates = groupTextItems(pdfText);
     const pdfMatches = matchRooms(rooms, pdfCandidates);
+    const pdfAttempt = createPdfAttempt({
+      durationMs: now() - pdfStartedAt,
+      textItems: pdfText,
+      candidates: pdfCandidates,
+      matches: pdfMatches
+    });
+    emitProcessingProgress(onProgress, {
+      engineId: "pdf-text",
+      engineLabel: "PDF.js",
+      passLabel: "Match PDF text",
+      status: "completed",
+      durationMs: now() - matchStartedAt
+    });
     const roomsNeedingOcr = getRoomsNeedingOcrRetry(rooms, pdfMatches);
 
     if (roomsNeedingOcr.length === 0 || preview.kind !== "canvas") {
@@ -473,7 +532,7 @@ async function processFloorPlanText(
         textItems: pdfText,
         candidates: pdfCandidates,
         matches: pdfMatches,
-        ocrAttempts: []
+        ocrAttempts: [pdfAttempt]
       };
     }
 
@@ -489,7 +548,7 @@ async function processFloorPlanText(
       textItems: [...pdfText, ...ocrPipeline.textItems],
       candidates: [...pdfCandidates, ...ocrPipeline.candidates],
       matches: mergePdfMatchesWithOcrRetries(pdfMatches, ocrPipeline.matches),
-      ocrAttempts: ocrPipeline.attempts
+      ocrAttempts: [pdfAttempt, ...ocrPipeline.attempts]
     };
   }
 
@@ -571,6 +630,82 @@ function loadImagePreview(file: File): Promise<Preview> {
       reject(new Error("Could not load the image floor plan."));
     };
     image.src = url;
+  });
+}
+
+function createPdfAttempt({
+  durationMs,
+  textItems,
+  candidates,
+  matches
+}: {
+  durationMs: number;
+  textItems: ExtractedTextItem[];
+  candidates: ExtractedLabelCandidate[];
+  matches: RoomMatch[];
+}): OcrAttempt {
+  return {
+    engineId: "pdf-text",
+    engineLabel: "PDF.js",
+    passLabel: "Text extraction",
+    durationMs,
+    textItems,
+    candidates,
+    matches,
+    stats: summarizeMatches(matches)
+  };
+}
+
+function summarizeMatches(matches: RoomMatch[]) {
+  return matches.reduce(
+    (stats, match) => {
+      stats[match.status === "ambiguous" ? "ambiguous" : match.status === "unmatched" ? "unmatched" : "matched"] += 1;
+      return stats;
+    },
+    { matched: 0, ambiguous: 0, unmatched: 0 }
+  );
+}
+
+function emitProcessingProgress(
+  onProgress: ((progress: OcrPipelineProgress) => void) | undefined,
+  {
+    engineId,
+    engineLabel,
+    passLabel,
+    status,
+    durationMs
+  }: {
+    engineId: string;
+    engineLabel: string;
+    passLabel: string;
+    status: OcrPipelineProgress["status"];
+    durationMs?: number;
+  }
+) {
+  if (!onProgress) {
+    return;
+  }
+
+  const duration = durationMs === undefined ? "" : ` (${Math.round(durationMs)}ms)`;
+  onProgress({
+    engineId,
+    engineLabel,
+    passLabel,
+    status,
+    message: `${status}: ${engineLabel} / ${passLabel}${duration}`
+  });
+}
+
+function createCanvasDisplayUrl(canvas: HTMLCanvasElement): Promise<string> {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(URL.createObjectURL(blob));
+        return;
+      }
+
+      resolve(canvas.toDataURL("image/png"));
+    }, "image/png");
   });
 }
 
