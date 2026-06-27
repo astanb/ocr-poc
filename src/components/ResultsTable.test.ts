@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { OcrAttempt } from "../lib/ocr/ocrPipeline";
 import type { RoomMatch } from "../types/matching";
-import { summarizeMatchSources } from "./ResultsTable";
+import { formatOcrAttemptSummary, summarizeMatchSources } from "./ResultsTable";
 
 const match = (
   roomId: string,
@@ -31,5 +32,45 @@ describe("summarizeMatchSources", () => {
       mixed: 1,
       unmatched: 1
     });
+  });
+});
+
+describe("formatOcrAttemptSummary", () => {
+  it("makes full-page and tiled attempts separately visible", () => {
+    const baseAttempt: OcrAttempt = {
+      engineId: "paddle",
+      engineLabel: "PaddleOCR.js",
+      passId: "raw",
+      passLabel: "Raw high-resolution render",
+      durationMs: 1234,
+      textItems: [],
+      candidates: [],
+      matches: [],
+      stats: {
+        matched: 7,
+        ambiguous: 0,
+        unmatched: 2
+      }
+    };
+
+    expect(
+      formatOcrAttemptSummary({
+        ...baseAttempt,
+        tileMode: "full-page",
+        setupDurationMs: 5678
+      })
+    ).toBe(
+      "PaddleOCR.js / Raw high-resolution render / full page: 7 matched, setup 5678ms, OCR 1234ms"
+    );
+
+    expect(
+      formatOcrAttemptSummary({
+        ...baseAttempt,
+        tileMode: "tiled",
+        tileCount: 4
+      })
+    ).toBe(
+      "PaddleOCR.js / Raw high-resolution render / tiled x4: 7 matched, OCR 1234ms"
+    );
   });
 });

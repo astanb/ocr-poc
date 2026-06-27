@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ExtractedTextItem } from "../../types/floorPlan";
 import type { RoomListItem } from "../../types/rooms";
 import { runOcrMatchPipeline, type OcrEngine } from "./ocrPipeline";
@@ -35,6 +35,10 @@ const engine = (
 });
 
 describe("runOcrMatchPipeline", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("scores each OCR engine and selects the best single-engine attempt by matched count", async () => {
     const rooms = [
       room("room-1", "GF001 - Store", "gf001 store", "GF001"),
@@ -208,5 +212,80 @@ describe("runOcrMatchPipeline", () => {
       x: 110,
       y: 210
     });
+  });
+
+  it("emits failed progress for the tile that fails", async () => {
+    const rooms = [room("room-1", "GF001 - Store", "gf001 store", "GF001")];
+    const progress: string[] = [];
+
+    await runOcrMatchPipeline({
+      image: "full",
+      rooms,
+      engines: [
+        {
+          id: "tile-engine",
+          label: "Tile OCR",
+          extractText: async (image) => {
+            if (image === "tile-b") {
+              throw new Error("tile could not be read");
+            }
+            return [];
+          }
+        }
+      ],
+      passes: [
+        {
+          id: "raw",
+          label: "Raw",
+          image: "full",
+          tiledImages: [
+            {
+              id: "tile-a",
+              label: "Tile A",
+              image: "tile-a",
+              x: 0,
+              y: 0,
+              width: 1000,
+              height: 1000
+            },
+            {
+              id: "tile-b",
+              label: "Tile B",
+              image: "tile-b",
+              x: 100,
+              y: 0,
+              width: 1000,
+              height: 1000
+            }
+          ]
+        }
+      ],
+      onProgress: (step) => progress.push(step.message)
+    });
+
+    expect(progress).toContain("failed: Tile OCR / Raw / tile 2/2");
+  });
+
+  it("separates one-time engine setup time from OCR attempt time", async () => {
+    const rooms = [room("room-1", "GF001 - Store", "gf001 store", "GF001")];
+    vi.spyOn(performance, "now")
+      .mockReturnValueOnce(100)
+      .mockReturnValueOnce(160);
+
+    const result = await runOcrMatchPipeline({
+      image: "fixture",
+      rooms,
+      engines: [
+        {
+          id: "setup-heavy",
+          label: "Setup Heavy OCR",
+          extractText: async () => [item("GF001 Store", 10, "ocr:setup-heavy")],
+          consumeSetupDurationMs: () => 10_000
+        }
+      ]
+    });
+
+    expect(result.attempts[0].setupDurationMs).toBe(10_000);
+    expect(result.attempts[0].durationMs).toBe(0);
   });
 });

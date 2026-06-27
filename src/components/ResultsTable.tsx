@@ -30,17 +30,8 @@ export function ResultsTable({ matches, ocrAttempts = [], onExport }: Props) {
       {ocrAttempts.length > 0 && (
         <div className="ocr-attempt-summary" aria-label="OCR engine summary">
           {ocrAttempts.map((attempt) => (
-            <span key={`${attempt.engineId}-${attempt.passId ?? "default"}`}>
-              {attempt.engineLabel}
-              {attempt.passLabel ? ` / ${attempt.passLabel}` : ""}:{" "}
-              {attempt.tileMode === "tiled" ? `tiled x${attempt.tileCount ?? 0}, ` : ""}
-              {attempt.stats.matched} matched
-              {attempt.setupDurationMs
-                ? `, setup ${Math.round(attempt.setupDurationMs)}ms`
-                : ""}
-              {attempt.errorMessage
-                ? ` (${attempt.errorMessage})`
-                : ` in ${Math.round(attempt.durationMs)}ms`}
+            <span key={getOcrAttemptKey(attempt)}>
+              {formatOcrAttemptSummary(attempt)}
             </span>
           ))}
         </div>
@@ -109,6 +100,45 @@ export function summarizeMatchSources(matches: RoomMatch[]) {
     },
     { total: 0, pdfText: 0, ocr: 0, mixed: 0, unmatched: 0 }
   );
+}
+
+export function formatOcrAttemptSummary(attempt: OcrAttempt): string {
+  const labelParts = [
+    attempt.engineLabel,
+    attempt.passLabel,
+    formatTileMode(attempt)
+  ].filter(Boolean);
+  const timingParts = [
+    attempt.setupDurationMs
+      ? `setup ${Math.round(attempt.setupDurationMs)}ms`
+      : undefined,
+    attempt.errorMessage
+      ? attempt.errorMessage
+      : `OCR ${Math.round(attempt.durationMs)}ms`
+  ].filter(Boolean);
+
+  return `${labelParts.join(" / ")}: ${attempt.stats.matched} matched, ${timingParts.join(", ")}`;
+}
+
+function getOcrAttemptKey(attempt: OcrAttempt): string {
+  return [
+    attempt.engineId,
+    attempt.passId ?? "default",
+    attempt.tileMode ?? "single",
+    attempt.tileCount ?? 0
+  ].join("-");
+}
+
+function formatTileMode(attempt: OcrAttempt): string | undefined {
+  if (attempt.tileMode === "tiled") {
+    return `tiled x${attempt.tileCount ?? 0}`;
+  }
+
+  if (attempt.tileMode === "full-page") {
+    return "full page";
+  }
+
+  return undefined;
 }
 
 function formatSource(source?: string): string {

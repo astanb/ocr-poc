@@ -151,14 +151,16 @@ async function runAttempt<TImage>({
   });
   try {
     const textItems = await engine.extractText(image);
+    const totalDurationMs = now() - startedAt;
+    const setupDurationMs = engine.consumeSetupDurationMs?.();
     const attempt = createAttempt({
       engine,
       rooms,
       passId,
       passLabel,
       tileMode,
-      durationMs: now() - startedAt,
-      setupDurationMs: engine.consumeSetupDurationMs?.(),
+      durationMs: getOcrDurationMs(totalDurationMs, setupDurationMs),
+      setupDurationMs,
       textItems
     });
     emitProgress(onProgress, {
@@ -221,19 +223,34 @@ async function runTiledAttempt<TImage>({
         tileCount: tiles.length,
         status: "started"
       });
-      const items = await engine.extractText(tile.image);
-      tileItems.push(...mapTileTextItemsToPage(items, tile));
-      emitProgress(onProgress, {
-        engine,
-        passId,
-        passLabel,
-        tileMode: "tiled",
-        tileIndex: index + 1,
-        tileCount: tiles.length,
-        status: "completed"
-      });
+      try {
+        const items = await engine.extractText(tile.image);
+        tileItems.push(...mapTileTextItemsToPage(items, tile));
+        emitProgress(onProgress, {
+          engine,
+          passId,
+          passLabel,
+          tileMode: "tiled",
+          tileIndex: index + 1,
+          tileCount: tiles.length,
+          status: "completed"
+        });
+      } catch (error) {
+        emitProgress(onProgress, {
+          engine,
+          passId,
+          passLabel,
+          tileMode: "tiled",
+          tileIndex: index + 1,
+          tileCount: tiles.length,
+          status: "failed"
+        });
+        throw error;
+      }
     }
 
+    const totalDurationMs = now() - startedAt;
+    const setupDurationMs = engine.consumeSetupDurationMs?.();
     return createAttempt({
       engine,
       rooms,
@@ -241,8 +258,8 @@ async function runTiledAttempt<TImage>({
       passLabel,
       tileMode: "tiled",
       tileCount: tiles.length,
-      durationMs: now() - startedAt,
-      setupDurationMs: engine.consumeSetupDurationMs?.(),
+      durationMs: getOcrDurationMs(totalDurationMs, setupDurationMs),
+      setupDurationMs,
       textItems: dedupeOcrTextItems(tileItems)
     });
   } catch (error: unknown) {
@@ -445,4 +462,8 @@ function averageConfidence(matches: RoomMatch[]): number {
 
 function now(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
+}
+
+function getOcrDurationMs(totalDurationMs: number, setupDurationMs?: number): number {
+  return Math.max(0, totalDurationMs - (setupDurationMs ?? 0));
 }
