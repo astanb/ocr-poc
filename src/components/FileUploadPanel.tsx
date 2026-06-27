@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { ParsedRoomList } from "../types/rooms";
 import type { FixtureFile } from "../lib/fixtures/fpTestFixtures";
 import type { OcrStrategyId } from "../lib/ocr/ocrEngines";
@@ -68,6 +69,17 @@ export function FileUploadPanel({
 }: Props) {
   const canProcess = Boolean(floorPlanFile && excelFile && parsedRoomList);
   const spreadsheetStatus = getSpreadsheetStatus(parsedRoomList, spreadsheetError);
+  const progressRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!progressRef.current) {
+      return;
+    }
+
+    progressRef.current.scrollTop = getProgressScrollTop({
+      scrollHeight: progressRef.current.scrollHeight
+    });
+  }, [processingSteps]);
 
   return (
     <section className="panel upload-panel" aria-label="Upload files">
@@ -192,7 +204,7 @@ export function FileUploadPanel({
       </div>
 
       {processingSteps.length > 0 && (
-        <div className="processing-steps" aria-label="Processing steps">
+        <div ref={progressRef} className="processing-steps" aria-label="Processing steps">
           {getDisplayedProcessingSteps(processingSteps).map((step, index) => (
             <span key={`${step.message}-${index}`} className={`step-${step.status}`}>
               {step.message}
@@ -232,4 +244,12 @@ export function getDisplayedProcessingSteps(
   processingSteps: OcrPipelineProgress[]
 ): OcrPipelineProgress[] {
   return processingSteps;
+}
+
+export function getProgressScrollTop({
+  scrollHeight
+}: {
+  scrollHeight: number;
+}): number {
+  return scrollHeight;
 }

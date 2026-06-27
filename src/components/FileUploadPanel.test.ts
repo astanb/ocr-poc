@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getDisplayedProcessingSteps, getSpreadsheetStatus } from "./FileUploadPanel";
+import {
+  getDisplayedProcessingSteps,
+  getProgressScrollTop,
+  getSpreadsheetStatus
+} from "./FileUploadPanel";
 
 describe("getSpreadsheetStatus", () => {
   it("reports detected rooms when the spreadsheet has parsed", () => {
@@ -52,5 +56,11 @@ describe("getSpreadsheetStatus", () => {
       "step 11",
       "step 12"
     ]);
+  });
+});
+
+describe("getProgressScrollTop", () => {
+  it("keeps the live processing panel pinned to the latest step", () => {
+    expect(getProgressScrollTop({ scrollHeight: 1840 })).toBe(1840);
   });
 });
