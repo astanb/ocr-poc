@@ -1,5 +1,8 @@
 import type { Point2D } from "@paddleocr/paddleocr-js";
 import { OCRClient, supportsFastBuild } from "tesseract-wasm";
+import tesseractWasmFastUrl from "../../../node_modules/tesseract-wasm/dist/tesseract-core.wasm?url";
+import tesseractWasmFallbackUrl from "../../../node_modules/tesseract-wasm/dist/tesseract-core-fallback.wasm?url";
+import tesseractWasmWorkerUrl from "../../../node_modules/tesseract-wasm/dist/tesseract-worker.js?url";
 import type { ExtractedTextItem } from "../../types/floorPlan";
 import { extractImageText } from "./extractImageText";
 import type { OcrEngine } from "./ocrPipeline";
@@ -13,9 +16,6 @@ export type OcrStrategyId =
   | "tesseract-wasm"
   | "compare-all";
 
-const TESSERACT_WASM_VERSION = "0.11.0";
-const TESSERACT_WASM_BASE_URL =
-  `https://cdn.jsdelivr.net/npm/tesseract-wasm@${TESSERACT_WASM_VERSION}/dist`;
 const TESSERACT_WASM_MODEL_URL =
   "https://cdn.jsdelivr.net/gh/tesseract-ocr/tessdata_fast@main/eng.traineddata";
 
@@ -195,11 +195,11 @@ async function getTesseractWasmClient(): Promise<OCRClient> {
 
 async function createTesseractWasmClient(): Promise<OCRClient> {
   const wasmName = supportsFastBuild()
-    ? "tesseract-core.wasm"
-    : "tesseract-core-fallback.wasm";
-  const wasmBinary = await fetchArrayBuffer(`${TESSERACT_WASM_BASE_URL}/${wasmName}`);
+    ? tesseractWasmFastUrl
+    : tesseractWasmFallbackUrl;
+  const wasmBinary = await fetchArrayBuffer(wasmName);
   const client = new OCRClient({
-    workerURL: `${TESSERACT_WASM_BASE_URL}/tesseract-worker.js`,
+    workerURL: tesseractWasmWorkerUrl,
     wasmBinary
   });
 
