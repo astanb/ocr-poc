@@ -5,6 +5,7 @@ export type FixtureFile = {
 };
 
 export const ROOM_LIST_FIXTURES: FixtureFile[] = [
+  { id: "0", label: "Set 0 room list", fileName: "0.xlsx" },
   { id: "1", label: "Set 1 room list", fileName: "1.xlsx" },
   { id: "2-1F", label: "Set 2 - 1F room list", fileName: "2-1F.xlsx" },
   { id: "2-GF", label: "Set 2 - GF room list", fileName: "2-GF.xlsx" },
@@ -22,6 +23,7 @@ export const ROOM_LIST_FIXTURES: FixtureFile[] = [
 ];
 
 export const FLOOR_PLAN_FIXTURES: FixtureFile[] = [
+  { id: "0", label: "Set 0 - PDF", fileName: "0.pdf" },
   { id: "1", label: "Set 1 - JPG", fileName: "1.jpg" },
   { id: "2-1F", label: "Set 2 - 1F PDF", fileName: "2-1F.pdf" },
   { id: "2-GF", label: "Set 2 - GF PDF", fileName: "2-GF.pdf" },
