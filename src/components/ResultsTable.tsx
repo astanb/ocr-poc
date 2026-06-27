@@ -30,8 +30,14 @@ export function ResultsTable({ matches, ocrAttempts = [], onExport }: Props) {
       {ocrAttempts.length > 0 && (
         <div className="ocr-attempt-summary" aria-label="OCR engine summary">
           {ocrAttempts.map((attempt) => (
-            <span key={attempt.engineId}>
-              {attempt.engineLabel}: {attempt.stats.matched} matched
+            <span key={`${attempt.engineId}-${attempt.passId ?? "default"}`}>
+              {attempt.engineLabel}
+              {attempt.passLabel ? ` / ${attempt.passLabel}` : ""}:{" "}
+              {attempt.tileMode === "tiled" ? `tiled x${attempt.tileCount ?? 0}, ` : ""}
+              {attempt.stats.matched} matched
+              {attempt.setupDurationMs
+                ? `, setup ${Math.round(attempt.setupDurationMs)}ms`
+                : ""}
               {attempt.errorMessage
                 ? ` (${attempt.errorMessage})`
                 : ` in ${Math.round(attempt.durationMs)}ms`}

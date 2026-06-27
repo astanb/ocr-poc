@@ -18,6 +18,7 @@ export type OcrStrategyId =
 
 const TESSERACT_WASM_MODEL_URL =
   "https://cdn.jsdelivr.net/gh/tesseract-ocr/tessdata_fast@main/eng.traineddata";
+const PADDLE_MODEL_BASE_URL = `${import.meta.env.BASE_URL}vendor/paddleocr`;
 
 export const OCR_STRATEGIES: Array<{
   id: OcrStrategyId;
@@ -71,7 +72,8 @@ const tesseractEngine: OcrEngine<OcrImage> = {
 const paddleEngine: OcrEngine<OcrImage> = {
   id: "paddle",
   label: "PaddleOCR.js",
-  extractText: extractPaddleText
+  extractText: extractPaddleText,
+  consumeSetupDurationMs: consumePaddleSetupDurationMs
 };
 
 const tesseractWasmEngine: OcrEngine<OcrImage> = {
@@ -90,6 +92,7 @@ let paddleOcrPromise: Promise<{
     }>;
   }>>;
 }> | undefined;
+let pendingPaddleSetupDurationMs: number | undefined;
 
 let tesseractWasmClientPromise: Promise<OCRClient> | undefined;
 
@@ -127,18 +130,34 @@ async function extractPaddleText(image: OcrImage): Promise<ExtractedTextItem[]> 
 }
 
 async function getPaddleOcr() {
-  paddleOcrPromise ??= import("@paddleocr/paddleocr-js").then(({ PaddleOCR }) =>
-    PaddleOCR.create({
-      textDetectionModelName: "PP-OCRv5_mobile_det",
-      textRecognitionModelName: "PP-OCRv5_mobile_rec",
-      ortOptions: {
-        backend: "auto",
-        wasmPaths: "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/"
-      }
-    })
-  );
+  if (!paddleOcrPromise) {
+    const startedAt = now();
+    paddleOcrPromise = import("@paddleocr/paddleocr-js").then(async ({ PaddleOCR }) => {
+      const instance = await PaddleOCR.create({
+        textDetectionModelName: "PP-OCRv5_mobile_det",
+        textRecognitionModelName: "PP-OCRv5_mobile_rec",
+        textDetectionModelAsset: {
+          url: `${PADDLE_MODEL_BASE_URL}/PP-OCRv5_mobile_det_onnx_infer.tar`
+        },
+        textRecognitionModelAsset: {
+          url: `${PADDLE_MODEL_BASE_URL}/PP-OCRv5_mobile_rec_onnx_infer.tar`
+        },
+        ortOptions: {
+          backend: "auto"
+        }
+      });
+      pendingPaddleSetupDurationMs = now() - startedAt;
+      return instance;
+    });
+  }
 
   return paddleOcrPromise;
+}
+
+function consumePaddleSetupDurationMs(): number | undefined {
+  const duration = pendingPaddleSetupDurationMs;
+  pendingPaddleSetupDurationMs = undefined;
+  return duration;
 }
 
 function getPolygonBounds(poly: Point2D[]): {
@@ -297,4 +316,8 @@ function getBrowserRuntimeInfo(): BrowserRuntimeInfo {
 function getDeviceMemory(): number | undefined {
   const maybeNavigator = navigator as Navigator & { deviceMemory?: number };
   return maybeNavigator.deviceMemory;
+}
+
+function now(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
 }

@@ -18,7 +18,13 @@ import {
   getOcrEngines,
   type OcrStrategyId
 } from "../lib/ocr/ocrEngines";
-import { runOcrMatchPipeline, type OcrAttempt } from "../lib/ocr/ocrPipeline";
+import {
+  runOcrMatchPipeline,
+  type OcrAttempt,
+  type OcrPipelineProgress
+} from "../lib/ocr/ocrPipeline";
+import { createOcrPassCanvases } from "../lib/ocr/ocrPreprocessing";
+import { createOcrTileCanvases } from "../lib/ocr/ocrTiling";
 import { extractPdfText } from "../lib/pdf/extractPdfText";
 import { renderPdfPage } from "../lib/pdf/renderPdfPage";
 import { groupTextItems } from "../lib/matching/groupTextItems";
@@ -44,6 +50,7 @@ type Preview =
   | {
       kind: "image";
       url: string;
+      canvas: HTMLCanvasElement;
       width: number;
       height: number;
     };
@@ -64,6 +71,7 @@ export function App() {
   const [candidates, setCandidates] = useState<ExtractedLabelCandidate[]>([]);
   const [matches, setMatches] = useState<RoomMatch[]>([]);
   const [ocrAttempts, setOcrAttempts] = useState<OcrAttempt[]>([]);
+  const [processingSteps, setProcessingSteps] = useState<OcrPipelineProgress[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [spreadsheetError, setSpreadsheetError] = useState<string>();
   const [errorDetails, setErrorDetails] = useState("");
@@ -243,6 +251,7 @@ export function App() {
 
     setIsProcessing(true);
     setErrorDetails("");
+    setProcessingSteps([]);
     setMessage("Processing files locally in the browser...");
 
     try {
@@ -251,7 +260,11 @@ export function App() {
         floorPlanFile,
         floorPreview,
         parsedRoomList.rooms,
-        selectedOcrStrategyId
+        selectedOcrStrategyId,
+        (progress) => {
+          setProcessingSteps((current) => [...current.slice(-80), progress]);
+          setMessage(progress.message);
+        }
       );
 
       setPreview(floorPreview);
@@ -293,6 +306,7 @@ export function App() {
     setCandidates([]);
     setMatches([]);
     setOcrAttempts([]);
+    setProcessingSteps([]);
   }
 
   const exportPayload = useMemo(
@@ -334,6 +348,7 @@ export function App() {
           onRoomListFixtureChange={handleRoomListFixtureChange}
           ocrStrategies={OCR_STRATEGIES}
           selectedOcrStrategyId={selectedOcrStrategyId}
+          processingSteps={processingSteps}
           onOcrStrategyChange={setSelectedOcrStrategyId}
           onColumnChange={handleColumnChange}
           onProcess={processFiles}
@@ -382,7 +397,8 @@ async function processFloorPlanText(
   file: File,
   preview: Preview,
   rooms: ParsedRoomList["rooms"],
-  ocrStrategyId: OcrStrategyId
+  ocrStrategyId: OcrStrategyId,
+  onProgress?: (progress: OcrPipelineProgress) => void
 ): Promise<{
   textItems: ExtractedTextItem[];
   candidates: ExtractedLabelCandidate[];
@@ -407,7 +423,9 @@ async function processFloorPlanText(
     const ocrPipeline = await runOcrMatchPipeline({
       image: preview.canvas,
       rooms: roomsNeedingOcr,
-      engines: getOcrEngines(ocrStrategyId)
+      engines: getOcrEngines(ocrStrategyId),
+      passes: createOcrPassInputs(preview.canvas),
+      onProgress
     });
 
     return {
@@ -419,9 +437,13 @@ async function processFloorPlanText(
   }
 
   const ocrPipeline = await runOcrMatchPipeline({
-    image: file,
+    image: preview.kind === "image" ? preview.canvas : file,
     rooms,
-    engines: getOcrEngines(ocrStrategyId)
+    engines: getOcrEngines(ocrStrategyId),
+    passes: preview.kind === "image"
+      ? createOcrPassInputs(preview.canvas)
+      : undefined,
+    onProgress
   });
 
   return {
@@ -432,14 +454,38 @@ async function processFloorPlanText(
   };
 }
 
+function createOcrPassInputs(source: HTMLCanvasElement) {
+  return createOcrPassCanvases(source).map((pass) => ({
+    id: pass.id,
+    label: pass.label,
+    image: pass.canvas,
+    tiledImages: createOcrTileCanvases(pass.canvas).map((tile) => ({
+      ...tile,
+      label: tile.id,
+      image: tile.canvas
+    }))
+  }));
+}
+
 function loadImagePreview(file: File): Promise<Preview> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const image = new Image();
     image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        URL.revokeObjectURL(url);
+        reject(new Error("Could not create the image OCR canvas."));
+        return;
+      }
+      context.drawImage(image, 0, 0);
       resolve({
         kind: "image",
         url,
+        canvas,
         width: image.naturalWidth,
         height: image.naturalHeight
       });

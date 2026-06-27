@@ -1,6 +1,7 @@
 import type { ParsedRoomList } from "../types/rooms";
 import type { FixtureFile } from "../lib/fixtures/fpTestFixtures";
 import type { OcrStrategyId } from "../lib/ocr/ocrEngines";
+import type { OcrPipelineProgress } from "../lib/ocr/ocrPipeline";
 
 type Props = {
   floorPlanFixtures: FixtureFile[];
@@ -20,6 +21,7 @@ type Props = {
   selectedColumn: string;
   shouldConfirmColumn: boolean;
   isProcessing: boolean;
+  processingSteps: OcrPipelineProgress[];
   onFloorPlanFixtureChange: (fixtureId: string) => void;
   onRoomListFixtureChange: (fixtureId: string) => void;
   onOcrStrategyChange: (strategyId: OcrStrategyId) => void;
@@ -41,6 +43,7 @@ export function FileUploadPanel({
   selectedColumn,
   shouldConfirmColumn,
   isProcessing,
+  processingSteps,
   onFloorPlanFixtureChange,
   onRoomListFixtureChange,
   onOcrStrategyChange,
@@ -133,6 +136,16 @@ export function FileUploadPanel({
           {spreadsheetStatus.text}
         </span>
       </div>
+
+      {processingSteps.length > 0 && (
+        <div className="processing-steps" aria-label="Processing steps">
+          {processingSteps.slice(-8).map((step, index) => (
+            <span key={`${step.message}-${index}`} className={`step-${step.status}`}>
+              {step.message}
+            </span>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

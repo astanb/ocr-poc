@@ -111,4 +111,102 @@ describe("runOcrMatchPipeline", () => {
     });
     expect(result.stats.matched).toBe(1);
   });
+
+  it("runs engines over preprocessing passes and preserves pass labels in attempts", async () => {
+    const rooms = [room("room-1", "GF001 - Store", "gf001 store", "GF001")];
+
+    const result = await runOcrMatchPipeline({
+      image: "raw-image",
+      rooms,
+      engines: [
+        {
+          id: "pass-aware",
+          label: "Pass aware OCR",
+          extractText: async (image) =>
+            image === "threshold-image"
+              ? [item("GF001 Store", 10, "ocr:pass-aware")]
+              : []
+        }
+      ],
+      passes: [
+        { id: "raw", label: "Raw", image: "raw-image" },
+        { id: "threshold", label: "Threshold", image: "threshold-image" }
+      ]
+    });
+
+    expect(result.attempts.map((attempt) => attempt.passId)).toEqual([
+      "raw",
+      "threshold"
+    ]);
+    expect(result.bestAttempt).toMatchObject({
+      engineId: "pass-aware",
+      passId: "threshold",
+      stats: {
+        matched: 1
+      }
+    });
+    expect(result.stats.matched).toBe(1);
+  });
+
+  it("runs tiled pass attempts by mapping tile coordinates back to page coordinates and deduping", async () => {
+    const rooms = [room("room-1", "GF001 - Store", "gf001 store", "GF001")];
+
+    const result = await runOcrMatchPipeline({
+      image: "full",
+      rooms,
+      engines: [
+        {
+          id: "tile-engine",
+          label: "Tile OCR",
+          extractText: async (image) =>
+            image === "tile-a" || image === "tile-b"
+              ? [item("GF001 Store", 10, "ocr:tile-engine")]
+              : []
+        }
+      ],
+      passes: [
+        {
+          id: "raw",
+          label: "Raw",
+          image: "full",
+          tiledImages: [
+            {
+              id: "tile-a",
+              label: "Tile A",
+              image: "tile-a",
+              x: 100,
+              y: 200,
+              width: 1000,
+              height: 1000
+            },
+            {
+              id: "tile-b",
+              label: "Tile B",
+              image: "tile-b",
+              x: 102,
+              y: 201,
+              width: 1000,
+              height: 1000
+            }
+          ]
+        }
+      ]
+    });
+
+    const tiledAttempt = result.attempts.find((attempt) => attempt.tileMode === "tiled");
+
+    expect(tiledAttempt).toMatchObject({
+      passId: "raw",
+      tileMode: "tiled",
+      tileCount: 2,
+      stats: {
+        matched: 1
+      }
+    });
+    expect(tiledAttempt?.textItems).toHaveLength(1);
+    expect(tiledAttempt?.textItems[0]).toMatchObject({
+      x: 110,
+      y: 210
+    });
+  });
 });

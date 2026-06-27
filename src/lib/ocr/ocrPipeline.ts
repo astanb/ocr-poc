@@ -6,16 +6,39 @@ import type { RoomMatch } from "../../types/matching";
 import type { RoomListItem } from "../../types/rooms";
 import { groupTextItems } from "../matching/groupTextItems";
 import { matchRooms } from "../matching/matchRooms";
+import {
+  dedupeOcrTextItems,
+  mapTileTextItemsToPage,
+  type OcrTile
+} from "./ocrTiling";
 
 export type OcrEngine<TImage = File | Blob | HTMLCanvasElement | string> = {
   id: string;
   label: string;
   extractText: (image: TImage) => Promise<ExtractedTextItem[]>;
+  consumeSetupDurationMs?: () => number | undefined;
+};
+
+export type OcrPipelineProgress = {
+  engineId: string;
+  engineLabel: string;
+  passId?: string;
+  passLabel?: string;
+  tileMode?: "full-page" | "tiled";
+  tileIndex?: number;
+  tileCount?: number;
+  status: "started" | "completed" | "failed";
+  message: string;
 };
 
 export type OcrAttempt = {
   engineId: string;
   engineLabel: string;
+  passId?: string;
+  passLabel?: string;
+  tileMode?: "full-page" | "tiled";
+  tileCount?: number;
+  setupDurationMs?: number;
   durationMs: number;
   textItems: ExtractedTextItem[];
   candidates: ExtractedLabelCandidate[];
@@ -42,49 +65,49 @@ export type OcrMatchPipelineResult = {
 export async function runOcrMatchPipeline<TImage>({
   image,
   rooms,
-  engines
+  engines,
+  passes,
+  onProgress
 }: {
   image: TImage;
   rooms: RoomListItem[];
   engines: OcrEngine<TImage>[];
+  passes?: Array<{
+    id: string;
+    label: string;
+    image: TImage;
+    tiledImages?: Array<OcrTile & {
+      label: string;
+      image: TImage;
+    }>;
+  }>;
+  onProgress?: (progress: OcrPipelineProgress) => void;
 }): Promise<OcrMatchPipelineResult> {
   const attempts: OcrAttempt[] = [];
+  const inputs = passes ?? [{ id: undefined, label: undefined, image, tiledImages: undefined }];
 
   for (const engine of engines) {
-    const startedAt = now();
-    try {
-      const textItems = await engine.extractText(image);
-      const candidates = groupTextItems(textItems);
-      const matches = matchRooms(rooms, candidates);
-
-      attempts.push({
-        engineId: engine.id,
-        engineLabel: engine.label,
-        durationMs: now() - startedAt,
-        textItems,
-        candidates,
-        matches,
-        stats: summarizeMatches(matches)
-      });
-    } catch (error: unknown) {
-      const matches = rooms.map((room): RoomMatch => ({
-        roomId: room.id,
-        roomRawName: room.rawName,
-        confidence: 0,
-        status: "unmatched",
-        reason: "OCR engine failed."
+    for (const input of inputs) {
+      attempts.push(await runAttempt({
+        engine,
+        image: input.image,
+        rooms,
+        passId: input.id,
+        passLabel: input.label,
+        tileMode: input.id ? "full-page" : undefined,
+        onProgress
       }));
 
-      attempts.push({
-        engineId: engine.id,
-        engineLabel: engine.label,
-        durationMs: now() - startedAt,
-        textItems: [],
-        candidates: [],
-        matches,
-        stats: summarizeMatches(matches),
-        errorMessage: error instanceof Error ? error.message : String(error)
-      });
+      if (input.tiledImages && input.tiledImages.length > 1) {
+        attempts.push(await runTiledAttempt({
+          engine,
+          rooms,
+          passId: input.id,
+          passLabel: input.label,
+          tiles: input.tiledImages,
+          onProgress
+        }));
+      }
     }
   }
 
@@ -98,6 +121,271 @@ export async function runOcrMatchPipeline<TImage>({
     candidates: attempts.flatMap((attempt) => attempt.candidates),
     matches,
     stats: summarizeMatches(matches)
+  };
+}
+
+async function runAttempt<TImage>({
+  engine,
+  image,
+  rooms,
+  passId,
+  passLabel,
+  tileMode,
+  onProgress
+}: {
+  engine: OcrEngine<TImage>;
+  image: TImage;
+  rooms: RoomListItem[];
+  passId?: string;
+  passLabel?: string;
+  tileMode?: "full-page" | "tiled";
+  onProgress?: (progress: OcrPipelineProgress) => void;
+}): Promise<OcrAttempt> {
+  const startedAt = now();
+  emitProgress(onProgress, {
+    engine,
+    passId,
+    passLabel,
+    tileMode,
+    status: "started"
+  });
+  try {
+    const textItems = await engine.extractText(image);
+    const attempt = createAttempt({
+      engine,
+      rooms,
+      passId,
+      passLabel,
+      tileMode,
+      durationMs: now() - startedAt,
+      setupDurationMs: engine.consumeSetupDurationMs?.(),
+      textItems
+    });
+    emitProgress(onProgress, {
+      engine,
+      passId,
+      passLabel,
+      tileMode,
+      status: "completed"
+    });
+    return attempt;
+  } catch (error: unknown) {
+    emitProgress(onProgress, {
+      engine,
+      passId,
+      passLabel,
+      tileMode,
+      status: "failed"
+    });
+    return createFailedAttempt({
+      engine,
+      rooms,
+      passId,
+      passLabel,
+      tileMode,
+      durationMs: now() - startedAt,
+      error
+    });
+  }
+}
+
+async function runTiledAttempt<TImage>({
+  engine,
+  rooms,
+  passId,
+  passLabel,
+  tiles,
+  onProgress
+}: {
+  engine: OcrEngine<TImage>;
+  rooms: RoomListItem[];
+  passId?: string;
+  passLabel?: string;
+  tiles: Array<OcrTile & {
+    label: string;
+    image: TImage;
+  }>;
+  onProgress?: (progress: OcrPipelineProgress) => void;
+}): Promise<OcrAttempt> {
+  const startedAt = now();
+  try {
+    const tileItems = [];
+
+    for (const [index, tile] of tiles.entries()) {
+      emitProgress(onProgress, {
+        engine,
+        passId,
+        passLabel,
+        tileMode: "tiled",
+        tileIndex: index + 1,
+        tileCount: tiles.length,
+        status: "started"
+      });
+      const items = await engine.extractText(tile.image);
+      tileItems.push(...mapTileTextItemsToPage(items, tile));
+      emitProgress(onProgress, {
+        engine,
+        passId,
+        passLabel,
+        tileMode: "tiled",
+        tileIndex: index + 1,
+        tileCount: tiles.length,
+        status: "completed"
+      });
+    }
+
+    return createAttempt({
+      engine,
+      rooms,
+      passId,
+      passLabel,
+      tileMode: "tiled",
+      tileCount: tiles.length,
+      durationMs: now() - startedAt,
+      setupDurationMs: engine.consumeSetupDurationMs?.(),
+      textItems: dedupeOcrTextItems(tileItems)
+    });
+  } catch (error: unknown) {
+    return createFailedAttempt({
+      engine,
+      rooms,
+      passId,
+      passLabel,
+      tileMode: "tiled",
+      tileCount: tiles.length,
+      durationMs: now() - startedAt,
+      error
+    });
+  }
+}
+
+function emitProgress<TImage>(
+  onProgress: ((progress: OcrPipelineProgress) => void) | undefined,
+  {
+    engine,
+    passId,
+    passLabel,
+    tileMode,
+    tileIndex,
+    tileCount,
+    status
+  }: {
+    engine: OcrEngine<TImage>;
+    passId?: string;
+    passLabel?: string;
+    tileMode?: "full-page" | "tiled";
+    tileIndex?: number;
+    tileCount?: number;
+    status: OcrPipelineProgress["status"];
+  }
+) {
+  if (!onProgress) {
+    return;
+  }
+
+  const parts = [
+    engine.label,
+    passLabel,
+    tileMode === "tiled" && tileIndex && tileCount
+      ? `tile ${tileIndex}/${tileCount}`
+      : tileMode === "full-page"
+        ? "full page"
+        : undefined
+  ].filter(Boolean);
+
+  onProgress({
+    engineId: engine.id,
+    engineLabel: engine.label,
+    passId,
+    passLabel,
+    tileMode,
+    tileIndex,
+    tileCount,
+    status,
+    message: `${status}: ${parts.join(" / ")}`
+  });
+}
+
+function createAttempt<TImage>({
+  engine,
+  rooms,
+  passId,
+  passLabel,
+  tileMode,
+  tileCount,
+  durationMs,
+  setupDurationMs,
+  textItems
+}: {
+  engine: OcrEngine<TImage>;
+  rooms: RoomListItem[];
+  passId?: string;
+  passLabel?: string;
+  tileMode?: "full-page" | "tiled";
+  tileCount?: number;
+  durationMs: number;
+  setupDurationMs?: number;
+  textItems: ExtractedTextItem[];
+}): OcrAttempt {
+  const candidates = groupTextItems(textItems);
+  const matches = matchRooms(rooms, candidates);
+
+  return {
+    engineId: engine.id,
+    engineLabel: engine.label,
+    passId,
+    passLabel,
+    tileMode,
+    tileCount,
+    setupDurationMs,
+    durationMs,
+    textItems,
+    candidates,
+    matches,
+    stats: summarizeMatches(matches)
+  };
+}
+
+function createFailedAttempt<TImage>({
+  engine,
+  rooms,
+  passId,
+  passLabel,
+  tileMode,
+  tileCount,
+  durationMs,
+  error
+}: {
+  engine: OcrEngine<TImage>;
+  rooms: RoomListItem[];
+  passId?: string;
+  passLabel?: string;
+  tileMode?: "full-page" | "tiled";
+  tileCount?: number;
+  durationMs: number;
+  error: unknown;
+}): OcrAttempt {
+  const matches = rooms.map((room): RoomMatch => ({
+    roomId: room.id,
+    roomRawName: room.rawName,
+    confidence: 0,
+    status: "unmatched",
+    reason: "OCR engine failed."
+  }));
+
+  return {
+    engineId: engine.id,
+    engineLabel: engine.label,
+    passId,
+    passLabel,
+    tileMode,
+    tileCount,
+    durationMs,
+    textItems: [],
+    candidates: [],
+    matches,
+    stats: summarizeMatches(matches),
+    errorMessage: error instanceof Error ? error.message : String(error)
   };
 }
 

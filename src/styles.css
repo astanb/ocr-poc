@@ -160,6 +160,29 @@ small {
   justify-content: flex-start;
 }
 
+.processing-steps {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.processing-steps span {
+  border-left: 3px solid #8aa6b8;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  padding: 6px 8px;
+}
+
+.processing-steps .step-completed {
+  border-left-color: #1f8f72;
+}
+
+.processing-steps .step-failed {
+  border-left-color: #a33a2b;
+}
+
 .viewer-panel {
   display: grid;
   gap: 12px;
