@@ -109,6 +109,7 @@ export function sortOcrAttemptsByMatches(attempts: OcrAttempt[]): OcrAttempt[] {
   return attempts
     .slice()
     .sort((left, right) =>
+      getUniqueRoomsFoundCount(right) - getUniqueRoomsFoundCount(left) ||
       right.stats.matched - left.stats.matched ||
       right.stats.ambiguous - left.stats.ambiguous ||
       left.durationMs - right.durationMs
@@ -151,7 +152,15 @@ export function formatOcrAttemptSummary(attempt: OcrAttempt): string {
       : `OCR ${Math.round(attempt.durationMs)}ms`
   ].filter(Boolean);
 
-  return `${labelParts.join(" / ")}: ${attempt.stats.matched} matched, ${timingParts.join(", ")}`;
+  return `${labelParts.join(" / ")}: ${getUniqueRoomsFoundCount(attempt)} unique rooms, ${attempt.stats.matched} matched, ${timingParts.join(", ")}`;
+}
+
+export function getUniqueRoomsFoundCount(attempt: OcrAttempt): number {
+  return new Set(
+    attempt.matches
+      .filter((match) => match.status !== "unmatched")
+      .map((match) => match.roomId)
+  ).size;
 }
 
 function getOcrAttemptKey(attempt: OcrAttempt): string {

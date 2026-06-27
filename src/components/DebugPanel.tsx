@@ -4,6 +4,7 @@ import type { RoomListItem } from "../types/rooms";
 
 type Props = {
   message: string;
+  processingDurationMs?: number;
   textItems: ExtractedTextItem[];
   candidates: ExtractedLabelCandidate[];
   matches: RoomMatch[];
@@ -13,6 +14,7 @@ type Props = {
 
 export function DebugPanel({
   message,
+  processingDurationMs,
   textItems,
   candidates,
   matches,
@@ -23,6 +25,11 @@ export function DebugPanel({
     <aside className="debug-panel" aria-label="Debug panel">
       <h2>Debug</h2>
       <p className="debug-message">{message}</p>
+      {processingDurationMs !== undefined && (
+        <p className="debug-message">
+          Total processing time: {formatProcessingDuration(processingDurationMs)}
+        </p>
+      )}
 
       {errorDetails && (
         <section className="error-trace" aria-label="Latest error trace">
@@ -37,6 +44,14 @@ export function DebugPanel({
       <DebugBlock title="Match Results" value={matches} />
     </aside>
   );
+}
+
+export function formatProcessingDuration(durationMs: number): string {
+  if (durationMs < 1000) {
+    return `${Math.round(durationMs)}ms`;
+  }
+
+  return `${(durationMs / 1000).toFixed(1)}s`;
 }
 
 function DebugBlock({ title, value }: { title: string; value: unknown }) {

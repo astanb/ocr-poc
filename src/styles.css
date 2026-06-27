@@ -138,37 +138,41 @@ small {
   border: 0;
   margin: 12px 0 0;
   padding: 0;
+  max-width: 360px;
 }
 
 .checkbox-field legend {
   color: #17202a;
+  font-size: 0.86rem;
   font-weight: 750;
 }
 
 .checkbox-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 8px 14px;
+  grid-template-columns: 1fr;
+  gap: 6px;
 }
 
 .compact-checkbox-grid {
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .checkbox-grid label {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 28px;
+  gap: 7px;
+  min-height: 22px;
   color: #334155;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 650;
 }
 
 .checkbox-grid input {
-  width: 16px;
-  height: 16px;
-  min-height: 16px;
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  min-height: 13px;
+  margin: 0;
   accent-color: #1f8f72;
 }
 
@@ -239,17 +243,31 @@ small {
   border: 1px solid #c8d2dc;
   border-radius: 6px;
   background: #edf1f5;
+  cursor: grab;
+  touch-action: none;
 }
 
-.floor-plan-stage > div,
+.floor-plan-stage:active {
+  cursor: grabbing;
+}
+
+.floor-plan-content,
+.floor-plan-content > div,
 .floor-plan-media {
   width: 100%;
   height: 100%;
 }
 
+.floor-plan-content {
+  position: relative;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
 .floor-plan-media {
   display: block;
   object-fit: contain;
+  pointer-events: none;
 }
 
 .empty-state {
@@ -271,7 +289,6 @@ small {
   border: 2px solid #fff;
   border-radius: 999px;
   box-shadow: 0 2px 8px rgba(15, 23, 42, 0.28);
-  transform: translate(-50%, -50%);
   touch-action: none;
 }
 
@@ -292,7 +309,7 @@ small {
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.22);
   color: #17202a;
   padding: 10px;
-  transform: translate(-50%, calc(-100% - 22px));
+  transform-origin: 50% 100%;
 }
 
 .pin-popover::after {
@@ -306,6 +323,19 @@ small {
   background: #fff;
   content: "";
   transform: translateX(-50%) rotate(45deg);
+}
+
+.pin-popover-below {
+  transform-origin: 50% 0;
+}
+
+.pin-popover-below::after {
+  top: -7px;
+  bottom: auto;
+  border-top: 1px solid #bfd0dc;
+  border-left: 1px solid #bfd0dc;
+  border-right: 0;
+  border-bottom: 0;
 }
 
 .pin-popover-header {

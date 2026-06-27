@@ -94,6 +94,7 @@ export function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [spreadsheetError, setSpreadsheetError] = useState<string>();
   const [errorDetails, setErrorDetails] = useState("");
+  const [processingDurationMs, setProcessingDurationMs] = useState<number>();
   const [message, setMessage] = useState("Upload a floor plan and room list to begin.");
 
   useEffect(() => {
@@ -272,9 +273,11 @@ export function App() {
     setErrorDetails("");
     setProcessingSteps([]);
     setSelectedRoomId(undefined);
+    setProcessingDurationMs(undefined);
     setMessage("Processing files locally in the browser...");
 
     try {
+      const startedAt = now();
       const floorPreview = await buildPreview(floorPlanFile);
       const processed = await processFloorPlanText(
         floorPlanFile,
@@ -293,6 +296,7 @@ export function App() {
       setCandidates(processed.candidates);
       setMatches(processed.matches);
       setOcrAttempts(processed.ocrAttempts);
+      setProcessingDurationMs(now() - startedAt);
       setMessage(
         `Processed ${parsedRoomList.rooms.length} rooms, ${processed.textItems.length} text items, and ${processed.candidates.length} label candidates.`
       );
@@ -329,6 +333,7 @@ export function App() {
     setOcrAttempts([]);
     setProcessingSteps([]);
     setSelectedRoomId(undefined);
+    setProcessingDurationMs(undefined);
   }
 
   const exportPayload = useMemo(
@@ -410,6 +415,7 @@ export function App() {
 
       <DebugPanel
         message={message}
+        processingDurationMs={processingDurationMs}
         textItems={textItems}
         candidates={candidates}
         matches={matches}
@@ -566,4 +572,8 @@ function loadImagePreview(file: File): Promise<Preview> {
 
 function isPdf(file: File): boolean {
   return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function now(): number {
+  return typeof performance === "undefined" ? Date.now() : performance.now();
 }

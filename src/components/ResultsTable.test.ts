@@ -3,6 +3,7 @@ import type { OcrAttempt } from "../lib/ocr/ocrPipeline";
 import type { RoomMatch } from "../types/matching";
 import {
   formatOcrAttemptSummary,
+  getUniqueRoomsFoundCount,
   sortOcrAttemptsByMatches,
   summarizeMatchSources
 } from "./ResultsTable";
@@ -49,7 +50,12 @@ describe("formatOcrAttemptSummary", () => {
       durationMs: 1234,
       textItems: [],
       candidates: [],
-      matches: [],
+      matches: [
+        match("room-1", "ocr:paddle"),
+        match("room-2", "ocr:paddle"),
+        match("room-3", "ocr:paddle", "ambiguous"),
+        match("missing", undefined, "unmatched")
+      ],
       stats: {
         matched: 7,
         ambiguous: 0,
@@ -64,7 +70,7 @@ describe("formatOcrAttemptSummary", () => {
         setupDurationMs: 5678
       })
     ).toBe(
-      "PaddleOCR.js / Raw high-resolution render / full page: 7 matched, setup 5678ms, OCR 1234ms"
+      "PaddleOCR.js / Raw high-resolution render / full page: 3 unique rooms, 7 matched, setup 5678ms, OCR 1234ms"
     );
 
     expect(
@@ -74,25 +80,53 @@ describe("formatOcrAttemptSummary", () => {
         tileCount: 4
       })
     ).toBe(
-      "PaddleOCR.js / Raw high-resolution render / tiled x4: 7 matched, OCR 1234ms"
+      "PaddleOCR.js / Raw high-resolution render / tiled x4: 3 unique rooms, 7 matched, OCR 1234ms"
     );
   });
 });
 
+describe("getUniqueRoomsFoundCount", () => {
+  it("counts distinct non-unmatched room results for an OCR attempt", () => {
+    expect(
+      getUniqueRoomsFoundCount({
+        engineId: "ocr",
+        engineLabel: "OCR",
+        durationMs: 0,
+        textItems: [],
+        candidates: [],
+        matches: [
+          match("room-1", "ocr:test"),
+          match("room-1", "ocr:test", "ambiguous"),
+          match("room-2", "ocr:test", "corrected"),
+          match("room-3", undefined, "unmatched")
+        ],
+        stats: {
+          matched: 1,
+          ambiguous: 1,
+          unmatched: 1
+        }
+      })
+    ).toBe(2);
+  });
+});
+
 describe("sortOcrAttemptsByMatches", () => {
-  it("orders attempts by matched count, then ambiguity, then duration", () => {
+  it("orders attempts by unique rooms, then matched count, ambiguity, and duration", () => {
     const attempt = (
       engineId: string,
       matched: number,
       ambiguous: number,
-      durationMs: number
+      durationMs: number,
+      uniqueRooms = matched + ambiguous
     ): OcrAttempt => ({
       engineId,
       engineLabel: engineId,
       durationMs,
       textItems: [],
       candidates: [],
-      matches: [],
+      matches: Array.from({ length: uniqueRooms }, (_, index) =>
+        match(`${engineId}-${index + 1}`, `ocr:${engineId}`)
+      ),
       stats: {
         matched,
         ambiguous,
@@ -105,9 +139,11 @@ describe("sortOcrAttemptsByMatches", () => {
         attempt("slow-less-useful", 2, 0, 100),
         attempt("most-useful", 4, 0, 500),
         attempt("ambiguous-tie", 4, 1, 400),
-        attempt("faster-tie", 4, 0, 200)
+        attempt("faster-tie", 4, 0, 200),
+        attempt("more-unique", 3, 0, 900, 6)
       ]).map((attempt) => attempt.engineId)
     ).toEqual([
+      "more-unique",
       "ambiguous-tie",
       "faster-tie",
       "most-useful",

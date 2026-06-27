@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { getPinPopoverDetails, getPinPopoverPosition } from "./FloorPlanViewer";
+import {
+  getCenteredViewTransform,
+  getPinPopoverDetails,
+  getPinPopoverPosition,
+  zoomViewTransform
+} from "./FloorPlanViewer";
 import type { RoomMatch } from "../types/matching";
 
 describe("getPinPopoverDetails", () => {
@@ -35,6 +40,41 @@ describe("getPinPopoverDetails", () => {
       left: 90,
       top: 92,
       placement: "above"
+    });
+  });
+});
+
+describe("floor plan view transforms", () => {
+  it("centres the viewport on a selected floor-plan coordinate", () => {
+    expect(
+      getCenteredViewTransform({
+        currentScale: 2,
+        previewWidth: 2000,
+        previewHeight: 1000,
+        viewportWidth: 1000,
+        viewportHeight: 500,
+        x: 1500,
+        y: 250
+      })
+    ).toEqual({
+      scale: 2,
+      panX: -1000,
+      panY: 0
+    });
+  });
+
+  it("zooms around the pointer so the inspected point stays under the cursor", () => {
+    expect(
+      zoomViewTransform({
+        current: { scale: 2, panX: -100, panY: -50 },
+        nextScale: 3,
+        originX: 300,
+        originY: 200
+      })
+    ).toEqual({
+      scale: 3,
+      panX: -300,
+      panY: -175
     });
   });
 });
