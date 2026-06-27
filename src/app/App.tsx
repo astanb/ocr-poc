@@ -46,6 +46,7 @@ type Preview =
       canvas: HTMLCanvasElement;
       width: number;
       height: number;
+      scale?: number;
     }
   | {
       kind: "image";
@@ -393,7 +394,8 @@ async function buildPreview(file: File): Promise<Preview> {
       kind: "canvas",
       canvas: rendered.canvas,
       width: rendered.width,
-      height: rendered.height
+      height: rendered.height,
+      scale: rendered.scale
     };
   }
 
@@ -413,7 +415,11 @@ async function processFloorPlanText(
   ocrAttempts: OcrAttempt[];
 }> {
   if (isPdf(file)) {
-    const pdfText = await extractPdfText(file);
+    const pdfText = await extractPdfText(
+      file,
+      undefined,
+      preview.kind === "canvas" ? preview.scale : undefined
+    );
     const pdfCandidates = groupTextItems(pdfText);
     const pdfMatches = matchRooms(rooms, pdfCandidates);
     const roomsNeedingOcr = getRoomsNeedingOcrRetry(rooms, pdfMatches);

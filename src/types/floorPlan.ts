@@ -27,5 +27,6 @@ export type RenderedPage = {
   page: number;
   width: number;
   height: number;
+  scale: number;
   canvas: HTMLCanvasElement;
 };
