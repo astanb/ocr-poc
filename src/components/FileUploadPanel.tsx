@@ -2,6 +2,12 @@ import type { ParsedRoomList } from "../types/rooms";
 import type { FixtureFile } from "../lib/fixtures/fpTestFixtures";
 import type { OcrStrategyId } from "../lib/ocr/ocrEngines";
 import type { OcrPipelineProgress } from "../lib/ocr/ocrPipeline";
+import type {
+  OcrPreprocessingPass,
+  OcrPreprocessingPassId
+} from "../lib/ocr/ocrPreprocessing";
+
+type OcrRunMode = "full-page" | "tiled";
 
 type Props = {
   floorPlanFixtures: FixtureFile[];
@@ -14,6 +20,9 @@ type Props = {
     label: string;
     description: string;
   }>;
+  ocrPasses: OcrPreprocessingPass[];
+  selectedOcrPassIds: OcrPreprocessingPassId[];
+  selectedOcrModes: OcrRunMode[];
   floorPlanFile?: File;
   excelFile?: File;
   parsedRoomList?: ParsedRoomList;
@@ -25,6 +34,8 @@ type Props = {
   onFloorPlanFixtureChange: (fixtureId: string) => void;
   onRoomListFixtureChange: (fixtureId: string) => void;
   onOcrStrategyChange: (strategyId: OcrStrategyId) => void;
+  onOcrPassToggle: (passId: OcrPreprocessingPassId) => void;
+  onOcrModeToggle: (mode: OcrRunMode) => void;
   onColumnChange: (column: string) => void;
   onProcess: () => void;
 };
@@ -36,6 +47,9 @@ export function FileUploadPanel({
   selectedRoomListId,
   selectedOcrStrategyId,
   ocrStrategies,
+  ocrPasses,
+  selectedOcrPassIds,
+  selectedOcrModes,
   floorPlanFile,
   excelFile,
   parsedRoomList,
@@ -47,6 +61,8 @@ export function FileUploadPanel({
   onFloorPlanFixtureChange,
   onRoomListFixtureChange,
   onOcrStrategyChange,
+  onOcrPassToggle,
+  onOcrModeToggle,
   onColumnChange,
   onProcess
 }: Props) {
@@ -108,6 +124,44 @@ export function FileUploadPanel({
           {ocrStrategies.find((strategy) => strategy.id === selectedOcrStrategyId)?.description}
         </small>
       </label>
+
+      <fieldset className="field checkbox-field">
+        <legend>OCR passes</legend>
+        <div className="checkbox-grid">
+          {ocrPasses.map((pass) => (
+            <label key={pass.id}>
+              <input
+                type="checkbox"
+                checked={selectedOcrPassIds.includes(pass.id)}
+                onChange={() => onOcrPassToggle(pass.id)}
+              />
+              <span>{pass.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="field checkbox-field">
+        <legend>OCR mode</legend>
+        <div className="checkbox-grid compact-checkbox-grid">
+          <label>
+            <input
+              type="checkbox"
+              checked={selectedOcrModes.includes("tiled")}
+              onChange={() => onOcrModeToggle("tiled")}
+            />
+            <span>Tiled</span>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={selectedOcrModes.includes("full-page")}
+              onChange={() => onOcrModeToggle("full-page")}
+            />
+            <span>Full page</span>
+          </label>
+        </div>
+      </fieldset>
 
       {parsedRoomList && (
         <label className="field compact-field">

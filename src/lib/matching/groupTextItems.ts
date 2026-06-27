@@ -24,15 +24,25 @@ export function groupTextItems(
   const groups: WorkingGroup[] = [];
 
   for (const item of sorted) {
-    const current = groups.at(-1);
-    if (current && shouldMergeIntoGroup(current, item)) {
-      current.items.push(item);
+    const group = findMergeGroup(groups, item);
+    if (group) {
+      group.items.push(item);
     } else {
       groups.push({ page: item.page, items: [item] });
     }
   }
 
   return groups.map(toCandidate);
+}
+
+function findMergeGroup(
+  groups: WorkingGroup[],
+  item: ExtractedTextItem
+): WorkingGroup | undefined {
+  return groups
+    .slice()
+    .reverse()
+    .find((group) => shouldMergeIntoGroup(group, item));
 }
 
 function shouldMergeIntoGroup(group: WorkingGroup, item: ExtractedTextItem): boolean {
@@ -60,9 +70,12 @@ function shouldMergeIntoGroup(group: WorkingGroup, item: ExtractedTextItem): boo
   const horizontallyAligned =
     item.x <= groupBounds.x + groupBounds.width &&
     item.x + item.width >= groupBounds.x;
+  const centerAligned =
+    Math.abs(getCenterX(item) - getCenterX(groupBounds)) <=
+    Math.max(groupBounds.width, item.width) / 2;
   const shortBlock = group.items.length <= 4;
 
-  return nearbyNextLine && horizontallyAligned && shortBlock;
+  return nearbyNextLine && (horizontallyAligned || centerAligned) && shortBlock;
 }
 
 function compareReadingOrder(
@@ -109,4 +122,8 @@ function getBounds(items: ExtractedTextItem[]) {
     width: maxX - minX,
     height: maxY - minY
   };
+}
+
+function getCenterX(box: Pick<ExtractedTextItem, "x" | "width">) {
+  return box.x + box.width / 2;
 }

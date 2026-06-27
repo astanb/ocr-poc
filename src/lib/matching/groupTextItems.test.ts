@@ -41,4 +41,18 @@ describe("groupTextItems", () => {
       "Teaching"
     ]);
   });
+
+  it("merges stacked room-name and room-code text when their centres align", () => {
+    const candidates = groupTextItems([
+      item("Teaching Area", 100, 20, 78),
+      item("G046", 128, 36, 24),
+      item("Girls WC", 260, 20, 46),
+      item("G046", 270, 36, 24)
+    ]);
+
+    expect(candidates.map((candidate) => candidate.rawText)).toEqual([
+      "Teaching Area G046",
+      "Girls WC G046"
+    ]);
+  });
 });

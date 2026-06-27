@@ -23,7 +23,11 @@ import {
   type OcrAttempt,
   type OcrPipelineProgress
 } from "../lib/ocr/ocrPipeline";
-import { createOcrPassCanvases } from "../lib/ocr/ocrPreprocessing";
+import {
+  OCR_PREPROCESSING_PASSES,
+  createOcrPassCanvases,
+  type OcrPreprocessingPassId
+} from "../lib/ocr/ocrPreprocessing";
 import { createOcrTileCanvases } from "../lib/ocr/ocrTiling";
 import { extractPdfText } from "../lib/pdf/extractPdfText";
 import { renderPdfPage } from "../lib/pdf/renderPdfPage";
@@ -58,11 +62,24 @@ type Preview =
 
 const LOW_COLUMN_CONFIDENCE = 0.75;
 
+type OcrRunMode = "full-page" | "tiled";
+
+type OcrOptions = {
+  passIds: OcrPreprocessingPassId[];
+  modes: OcrRunMode[];
+};
+
+const DEFAULT_OCR_OPTIONS: OcrOptions = {
+  passIds: ["raw"],
+  modes: ["tiled"]
+};
+
 export function App() {
   const [selectedFloorPlanId, setSelectedFloorPlanId] = useState(FLOOR_PLAN_FIXTURES[0]?.id ?? "");
   const [selectedRoomListId, setSelectedRoomListId] = useState(ROOM_LIST_FIXTURES[0]?.id ?? "");
   const [selectedOcrStrategyId, setSelectedOcrStrategyId] =
     useState<OcrStrategyId>("compare-all");
+  const [ocrOptions, setOcrOptions] = useState<OcrOptions>(DEFAULT_OCR_OPTIONS);
   const [floorPlanFile, setFloorPlanFile] = useState<File>();
   const [excelFile, setExcelFile] = useState<File>();
   const [selectedColumn, setSelectedColumn] = useState("");
@@ -264,6 +281,7 @@ export function App() {
         floorPreview,
         parsedRoomList.rooms,
         selectedOcrStrategyId,
+        ocrOptions,
         (progress) => {
           setProcessingSteps((current) => [...current.slice(-80), progress]);
           setMessage(progress.message);
@@ -352,8 +370,23 @@ export function App() {
           onRoomListFixtureChange={handleRoomListFixtureChange}
           ocrStrategies={OCR_STRATEGIES}
           selectedOcrStrategyId={selectedOcrStrategyId}
+          ocrPasses={OCR_PREPROCESSING_PASSES}
+          selectedOcrPassIds={ocrOptions.passIds}
+          selectedOcrModes={ocrOptions.modes}
           processingSteps={processingSteps}
           onOcrStrategyChange={setSelectedOcrStrategyId}
+          onOcrPassToggle={(passId) => {
+            setOcrOptions((current) => ({
+              ...current,
+              passIds: toggleRequiredValue(current.passIds, passId)
+            }));
+          }}
+          onOcrModeToggle={(mode) => {
+            setOcrOptions((current) => ({
+              ...current,
+              modes: toggleRequiredValue(current.modes, mode)
+            }));
+          }}
           onColumnChange={handleColumnChange}
           onProcess={processFiles}
         />
@@ -407,6 +440,7 @@ async function processFloorPlanText(
   preview: Preview,
   rooms: ParsedRoomList["rooms"],
   ocrStrategyId: OcrStrategyId,
+  ocrOptions: OcrOptions,
   onProgress?: (progress: OcrPipelineProgress) => void
 ): Promise<{
   textItems: ExtractedTextItem[];
@@ -437,7 +471,7 @@ async function processFloorPlanText(
       image: preview.canvas,
       rooms: roomsNeedingOcr,
       engines: getOcrEngines(ocrStrategyId),
-      passes: createOcrPassInputs(preview.canvas),
+      passes: createOcrPassInputs(preview.canvas, ocrOptions),
       onProgress
     });
 
@@ -454,7 +488,7 @@ async function processFloorPlanText(
     rooms,
     engines: getOcrEngines(ocrStrategyId),
     passes: preview.kind === "image"
-      ? createOcrPassInputs(preview.canvas)
+      ? createOcrPassInputs(preview.canvas, ocrOptions)
       : undefined,
     onProgress
   });
@@ -467,17 +501,36 @@ async function processFloorPlanText(
   };
 }
 
-function createOcrPassInputs(source: HTMLCanvasElement) {
-  return createOcrPassCanvases(source).map((pass) => ({
+export function createOcrPassInputs(
+  source: HTMLCanvasElement,
+  options: OcrOptions = DEFAULT_OCR_OPTIONS
+) {
+  const selectedPasses = OCR_PREPROCESSING_PASSES.filter((pass) =>
+    options.passIds.includes(pass.id)
+  );
+  const includeTiled = options.modes.includes("tiled");
+
+  return createOcrPassCanvases(source, selectedPasses).map((pass) => ({
     id: pass.id,
     label: pass.label,
     image: pass.canvas,
-    tiledImages: createOcrTileCanvases(pass.canvas).map((tile) => ({
-      ...tile,
-      label: tile.id,
-      image: tile.canvas
-    }))
+    runFullPage: options.modes.includes("full-page"),
+    tiledImages: includeTiled
+      ? createOcrTileCanvases(pass.canvas).map((tile) => ({
+        ...tile,
+        label: tile.id,
+        image: tile.canvas
+      }))
+      : undefined
   }));
+}
+
+function toggleRequiredValue<TValue>(values: TValue[], value: TValue): TValue[] {
+  if (values.includes(value)) {
+    return values.length === 1 ? values : values.filter((current) => current !== value);
+  }
+
+  return [...values, value];
 }
 
 function loadImagePreview(file: File): Promise<Preview> {

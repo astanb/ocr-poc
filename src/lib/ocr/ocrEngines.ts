@@ -66,20 +66,23 @@ export function getOcrEngines(strategyId: OcrStrategyId): OcrEngine<OcrImage>[] 
 const tesseractEngine: OcrEngine<OcrImage> = {
   id: "tesseract",
   label: "Tesseract.js",
-  extractText: (image) => extractImageText(image, 1, "ocr:tesseract")
+  extractText: (image) => extractImageText(image, 1, "ocr:tesseract"),
+  maxTileConcurrency: 3
 };
 
 const paddleEngine: OcrEngine<OcrImage> = {
   id: "paddle",
   label: "PaddleOCR.js",
   extractText: extractPaddleText,
-  consumeSetupDurationMs: consumePaddleSetupDurationMs
+  consumeSetupDurationMs: consumePaddleSetupDurationMs,
+  maxTileConcurrency: 1
 };
 
 const tesseractWasmEngine: OcrEngine<OcrImage> = {
   id: "tesseract-wasm",
   label: "tesseract-wasm",
-  extractText: extractTesseractWasmText
+  extractText: extractTesseractWasmText,
+  maxTileConcurrency: 1
 };
 
 let paddleOcrPromise: Promise<{

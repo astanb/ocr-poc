@@ -99,8 +99,8 @@ describe("matchRooms", () => {
     expect(matches[0]).toMatchObject({
       matchedCandidateId: "candidate-1",
       status: "matched",
-      confidence: 0.9,
-      reason: "Exact room-code match."
+      confidence: 0.95,
+      reason: "Exact room-code match with partial room-name support."
     });
   });
 
@@ -133,6 +133,23 @@ describe("matchRooms", () => {
     expect(matches[1]).toMatchObject({
       roomId: "room-1",
       matchedCandidateId: "candidate-1",
+      status: "matched"
+    });
+  });
+
+  it("prefers the duplicate room-code candidate with matching room-name context", () => {
+    const matches = matchRooms(
+      [room("room-1", "G046 - Teaching Area", "g046 teaching area", "G046")],
+      [
+        candidate("candidate-1", "Girls WC G046", "girls wc g046", 10),
+        candidate("candidate-2", "Teaching Area G046", "teaching area g046", 200)
+      ]
+    );
+
+    expect(matches[0]).toMatchObject({
+      matchedCandidateId: "candidate-2",
+      matchedText: "Teaching Area G046",
+      confidence: 0.98,
       status: "matched"
     });
   });

@@ -56,7 +56,7 @@ describeIfFixtureExists("local fixture pipeline", () => {
     ).toMatchObject({
       status: "matched",
       confidence: 0.95,
-      reason: "Unique exact room-code match with supporting name overlap."
+      reason: "Exact room-code match with partial room-name support."
     });
   }, 30_000);
 });

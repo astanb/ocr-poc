@@ -17,6 +17,7 @@ export type OcrEngine<TImage = File | Blob | HTMLCanvasElement | string> = {
   label: string;
   extractText: (image: TImage) => Promise<ExtractedTextItem[]>;
   consumeSetupDurationMs?: () => number | undefined;
+  maxTileConcurrency?: number;
 };
 
 export type OcrPipelineProgress = {
@@ -62,6 +63,17 @@ export type OcrMatchPipelineResult = {
   stats: MatchStats;
 };
 
+type OcrPipelineInput<TImage> = {
+  id?: string;
+  label?: string;
+  image: TImage;
+  runFullPage?: boolean;
+  tiledImages?: Array<OcrTile & {
+    label: string;
+    image: TImage;
+  }>;
+};
+
 export async function runOcrMatchPipeline<TImage>({
   image,
   rooms,
@@ -72,31 +84,25 @@ export async function runOcrMatchPipeline<TImage>({
   image: TImage;
   rooms: RoomListItem[];
   engines: OcrEngine<TImage>[];
-  passes?: Array<{
-    id: string;
-    label: string;
-    image: TImage;
-    tiledImages?: Array<OcrTile & {
-      label: string;
-      image: TImage;
-    }>;
-  }>;
+  passes?: OcrPipelineInput<TImage>[];
   onProgress?: (progress: OcrPipelineProgress) => void;
 }): Promise<OcrMatchPipelineResult> {
   const attempts: OcrAttempt[] = [];
-  const inputs = passes ?? [{ id: undefined, label: undefined, image, tiledImages: undefined }];
+  const inputs: OcrPipelineInput<TImage>[] = passes ?? [{ image }];
 
   for (const engine of engines) {
     for (const input of inputs) {
-      attempts.push(await runAttempt({
-        engine,
-        image: input.image,
-        rooms,
-        passId: input.id,
-        passLabel: input.label,
-        tileMode: input.id ? "full-page" : undefined,
-        onProgress
-      }));
+      if (input.runFullPage ?? true) {
+        attempts.push(await runAttempt({
+          engine,
+          image: input.image,
+          rooms,
+          passId: input.id,
+          passLabel: input.label,
+          tileMode: input.id ? "full-page" : undefined,
+          onProgress
+        }));
+      }
 
       if (input.tiledImages && input.tiledImages.length > 1) {
         attempts.push(await runTiledAttempt({
@@ -211,21 +217,10 @@ async function runTiledAttempt<TImage>({
 }): Promise<OcrAttempt> {
   const startedAt = now();
   try {
-    const tileItems = [];
-
-    for (const [index, tile] of tiles.entries()) {
-      emitProgress(onProgress, {
-        engine,
-        passId,
-        passLabel,
-        tileMode: "tiled",
-        tileIndex: index + 1,
-        tileCount: tiles.length,
-        status: "started"
-      });
-      try {
-        const items = await engine.extractText(tile.image);
-        tileItems.push(...mapTileTextItemsToPage(items, tile));
+    const tileItems = await mapConcurrent(
+      tiles.map((tile, index) => ({ tile, index })),
+      getTileConcurrency(engine),
+      async ({ tile, index }) => {
         emitProgress(onProgress, {
           engine,
           passId,
@@ -233,21 +228,34 @@ async function runTiledAttempt<TImage>({
           tileMode: "tiled",
           tileIndex: index + 1,
           tileCount: tiles.length,
-          status: "completed"
+          status: "started"
         });
-      } catch (error) {
-        emitProgress(onProgress, {
-          engine,
-          passId,
-          passLabel,
-          tileMode: "tiled",
-          tileIndex: index + 1,
-          tileCount: tiles.length,
-          status: "failed"
-        });
-        throw error;
+        try {
+          const items = await engine.extractText(tile.image);
+          emitProgress(onProgress, {
+            engine,
+            passId,
+            passLabel,
+            tileMode: "tiled",
+            tileIndex: index + 1,
+            tileCount: tiles.length,
+            status: "completed"
+          });
+          return mapTileTextItemsToPage(items, tile);
+        } catch (error) {
+          emitProgress(onProgress, {
+            engine,
+            passId,
+            passLabel,
+            tileMode: "tiled",
+            tileIndex: index + 1,
+            tileCount: tiles.length,
+            status: "failed"
+          });
+          throw error;
+        }
       }
-    }
+    );
 
     const totalDurationMs = now() - startedAt;
     const setupDurationMs = engine.consumeSetupDurationMs?.();
@@ -260,7 +268,7 @@ async function runTiledAttempt<TImage>({
       tileCount: tiles.length,
       durationMs: getOcrDurationMs(totalDurationMs, setupDurationMs),
       setupDurationMs,
-      textItems: dedupeOcrTextItems(tileItems)
+      textItems: dedupeOcrTextItems(tileItems.flat())
     });
   } catch (error: unknown) {
     return createFailedAttempt({
@@ -505,4 +513,34 @@ function now(): number {
 
 function getOcrDurationMs(totalDurationMs: number, setupDurationMs?: number): number {
   return Math.max(0, totalDurationMs - (setupDurationMs ?? 0));
+}
+
+async function mapConcurrent<TInput, TOutput>(
+  inputs: TInput[],
+  concurrency: number,
+  mapper: (input: TInput) => Promise<TOutput>
+): Promise<TOutput[]> {
+  const results = new Array<TOutput>(inputs.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(Math.max(1, concurrency), inputs.length);
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextIndex < inputs.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await mapper(inputs[currentIndex]);
+    }
+  }));
+
+  return results;
+}
+
+function getTileConcurrency<TImage>(engine: OcrEngine<TImage>): number {
+  if (engine.maxTileConcurrency !== undefined) {
+    return engine.maxTileConcurrency;
+  }
+
+  const hardwareConcurrency =
+    typeof navigator === "undefined" ? undefined : navigator.hardwareConcurrency;
+  return Math.min(4, Math.max(1, hardwareConcurrency ?? 2));
 }

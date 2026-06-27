@@ -133,6 +133,45 @@ small {
   white-space: nowrap;
 }
 
+.checkbox-field {
+  gap: 8px;
+  border: 0;
+  margin: 12px 0 0;
+  padding: 0;
+}
+
+.checkbox-field legend {
+  color: #17202a;
+  font-weight: 750;
+}
+
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px 14px;
+}
+
+.compact-checkbox-grid {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.checkbox-grid label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.checkbox-grid input {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  accent-color: #1f8f72;
+}
+
 .field input,
 .field select {
   width: 100%;

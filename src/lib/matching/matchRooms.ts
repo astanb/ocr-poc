@@ -115,7 +115,17 @@ function scoreCandidate(
   const tokenOverlap = getTokenOverlap(roomTokens, candidateTokens);
 
   if (roomCode && candidateCode && roomCode === normalizeRoomCode(candidateCode)) {
-    const confidence = tokenOverlap >= 0.4 ? 0.95 : 0.9;
+    const descriptiveTokenOverlap = getDescriptiveTokenOverlap(
+      roomTokens,
+      candidateTokens,
+      roomCode
+    );
+    const confidence =
+      descriptiveTokenOverlap >= 0.75
+        ? 0.98
+        : descriptiveTokenOverlap >= 0.4 || tokenOverlap >= 0.4
+          ? 0.95
+          : 0.86;
     return {
       candidate,
       candidateId: candidate.id,
@@ -124,9 +134,11 @@ function scoreCandidate(
       y: candidate.y,
       confidence,
       reason:
-        confidence === 0.95
-          ? "Unique exact room-code match with supporting name overlap."
-          : "Exact room-code match."
+        confidence === 0.98
+          ? "Exact room-code match with strong room-name support."
+          : confidence === 0.95
+            ? "Exact room-code match with partial room-name support."
+            : "Exact room-code match without room-name support."
     };
   }
 
@@ -182,6 +194,21 @@ function getTokenOverlap(roomTokens: string[], candidateTokens: string[]): numbe
   const candidateSet = new Set(candidateTokens);
   const matched = roomTokens.filter((token) => candidateSet.has(token)).length;
   return matched / roomTokens.length;
+}
+
+function getDescriptiveTokenOverlap(
+  roomTokens: string[],
+  candidateTokens: string[],
+  roomCode: string
+): number {
+  const code = roomCode.toLowerCase();
+  const descriptiveTokens = roomTokens.filter((token) => token !== code);
+
+  if (descriptiveTokens.length === 0) {
+    return 0;
+  }
+
+  return getTokenOverlap(descriptiveTokens, candidateTokens);
 }
 
 function nameWithoutRoomCode(room: RoomListItem): string {

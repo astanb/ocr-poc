@@ -173,6 +173,7 @@ describe("runOcrMatchPipeline", () => {
           id: "raw",
           label: "Raw",
           image: "full",
+          runFullPage: false,
           tiledImages: [
             {
               id: "tile-a",
@@ -238,6 +239,7 @@ describe("runOcrMatchPipeline", () => {
           id: "raw",
           label: "Raw",
           image: "full",
+          runFullPage: false,
           tiledImages: [
             {
               id: "tile-a",
@@ -264,6 +266,51 @@ describe("runOcrMatchPipeline", () => {
     });
 
     expect(progress).toContain("failed: Tile OCR / Raw / tile 2/2");
+  });
+
+  it("runs tile OCR concurrently up to the engine limit", async () => {
+    const rooms = [room("room-1", "GF001 - Store", "gf001 store", "GF001")];
+    let active = 0;
+    let maxActive = 0;
+
+    const result = await runOcrMatchPipeline({
+      image: "full",
+      rooms,
+      engines: [
+        {
+          id: "parallel",
+          label: "Parallel OCR",
+          maxTileConcurrency: 2,
+          extractText: async () => {
+            active += 1;
+            maxActive = Math.max(maxActive, active);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            active -= 1;
+            return [item("GF001 Store", 10, "ocr:parallel")];
+          }
+        }
+      ],
+      passes: [
+        {
+          id: "raw",
+          label: "Raw",
+          image: "full",
+          runFullPage: false,
+          tiledImages: [
+            { id: "tile-a", label: "Tile A", image: "tile-a", x: 0, y: 0, width: 100, height: 100 },
+            { id: "tile-b", label: "Tile B", image: "tile-b", x: 100, y: 0, width: 100, height: 100 },
+            { id: "tile-c", label: "Tile C", image: "tile-c", x: 200, y: 0, width: 100, height: 100 }
+          ]
+        }
+      ]
+    });
+
+    expect(maxActive).toBe(2);
+    expect(result.attempts).toHaveLength(1);
+    expect(result.attempts[0]).toMatchObject({
+      tileMode: "tiled",
+      tileCount: 3
+    });
   });
 
   it("separates one-time engine setup time from OCR attempt time", async () => {
