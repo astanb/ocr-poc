@@ -6,14 +6,19 @@ export type FixtureFile = {
 
 export const ROOM_LIST_FIXTURES: FixtureFile[] = [
   { id: "1", label: "Set 1 room list", fileName: "1.xlsx" },
-  { id: "2", label: "Set 2 room list", fileName: "2.xlsx" },
+  { id: "2-1F", label: "Set 2 - 1F room list", fileName: "2-1F.xlsx" },
+  { id: "2-GF", label: "Set 2 - GF room list", fileName: "2-GF.xlsx" },
+  { id: "2-LG", label: "Set 2 - LG room list", fileName: "2-LG.xlsx" },
   { id: "3", label: "Set 3 room list", fileName: "3.xlsx" },
   { id: "4", label: "Set 4 room list", fileName: "4.xlsx" },
   { id: "5", label: "Set 5 room list", fileName: "5.xlsx" },
   { id: "6", label: "Set 6 room list", fileName: "6.xlsx" },
-  { id: "7", label: "Set 7 room list", fileName: "7.xlsx" },
+  { id: "6-GF", label: "Set 6 - GF room list", fileName: "6-GF.xlsx" },
+  { id: "7-1F", label: "Set 7 - 1F room list", fileName: "7-1F.xlsx" },
+  { id: "7-GF", label: "Set 7 - GF room list", fileName: "7-GF.xlsx" },
   { id: "8", label: "Set 8 room list", fileName: "8.xlsx" },
-  { id: "9", label: "Set 9 room list", fileName: "9.xlsx" }
+  { id: "9-FF", label: "Set 9 - FF room list", fileName: "9-FF.xlsx" },
+  { id: "9-GF", label: "Set 9 - GF room list", fileName: "9-GF.xlsx" }
 ];
 
 export const FLOOR_PLAN_FIXTURES: FixtureFile[] = [
@@ -42,6 +47,10 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 export function getDefaultRoomListIdForFloorPlan(floorPlanId: string): string {
+  if (ROOM_LIST_FIXTURES.some((fixture) => fixture.id === floorPlanId)) {
+    return floorPlanId;
+  }
+
   return floorPlanId.split("-")[0] ?? floorPlanId;
 }
 
